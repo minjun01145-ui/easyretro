@@ -14,7 +14,7 @@ namespace EasyRetro {
    if(RtlGetVersion(ref v)!=0 || v.major<10 || v.build<22000 || !Environment.Is64BitOperatingSystem)
     throw new PlatformNotSupportedException("Windows 11 x64 (빌드 22000 이상)이 필요합니다.");
    ushort processMachine,nativeMachine;
-   Check(IsWow64Process2(new IntPtr(-1),out processMachine,out nativeMachine));
+   Check(IsWow64Process2(new IntPtr(-1),out processMachine,out nativeMachine),"프로세스 아키텍처 확인(IsWow64Process2)");
    if(nativeMachine!=0x8664)throw new PlatformNotSupportedException("이 버전은 x64 전용입니다. ARM64 에뮬레이션은 지원하지 않습니다.");
    checkedBuild=v.build;
    return checkedBuild;
@@ -39,15 +39,29 @@ namespace EasyRetro {
     if(action==0x29) Marshal.WriteInt32(p,size);
     // SPI_GETDESKWALLPAPER counts UTF-16 characters; metrics/font operations count bytes.
     uint parameter=(uint)(action==0x73?size/2:size);
-    Check(SystemParametersInfo(action,parameter,p,0));
+    Check(SystemParametersInfo(action,parameter,p,0),"시스템 설정 읽기(SPI action=0x"+action.ToString("X")+")");
     Marshal.Copy(p,bytes,0,size);
     return bytes;
    } finally {Marshal.FreeHGlobal(p);}
   }
-  public static void SpiSet(uint action,byte[] bytes) { IntPtr p=Marshal.AllocHGlobal(bytes.Length); try {Marshal.Copy(bytes,0,p,bytes.Length); Check(SystemParametersInfo(action,(uint)bytes.Length,p,3));} finally {Marshal.FreeHGlobal(p);} }
+  public static void SpiSet(uint action,byte[] bytes) { IntPtr p=Marshal.AllocHGlobal(bytes.Length); try {Marshal.Copy(bytes,0,p,bytes.Length); Check(SystemParametersInfo(action,(uint)bytes.Length,p,3),(action==0x2a?"글꼴 설정(SPI_SETNONCLIENTMETRICS)":"아이콘 글꼴 설정(SPI_SETICONTITLELOGFONT)")+" action=0x"+action.ToString("X4"));} finally {Marshal.FreeHGlobal(p);} }
   public static T Decode<T>(byte[] bytes) { IntPtr p=Marshal.AllocHGlobal(bytes.Length); try {Marshal.Copy(bytes,0,p,bytes.Length); return (T)Marshal.PtrToStructure(p,typeof(T));} finally {Marshal.FreeHGlobal(p);} }
   public static byte[] Encode<T>(T value) { int size=Marshal.SizeOf(typeof(T)); IntPtr p=Marshal.AllocHGlobal(size); try {Marshal.StructureToPtr(value,p,false); byte[] b=new byte[size]; Marshal.Copy(p,b,0,size); return b;} finally {Marshal.FreeHGlobal(p);} }
-  public static void Check(bool ok) { if(!ok) throw new Win32Exception(Marshal.GetLastWin32Error()); }
+  public static void Check(bool ok){Check(ok,"Win32 API");}
+  public static void Check(bool ok,string what) {
+   if(ok)return;
+   int code=Marshal.GetLastWin32Error();
+   string message=what+" 실패: "+(code==0?"Win32 API가 오류 코드 없이 실패를 반환했습니다":new Win32Exception(code).Message);
+   message+=" (코드 0x"+code.ToString("X8")+", Marshal.GetLastWin32Error()="+code+")";
+   Log.Write(message);throw new Win32Exception(code,message);
+  }
+  public static void ReloadCursors() {
+   for(int attempt=0;attempt<2;attempt++) {
+    if(SystemParametersInfo(0x57,0,IntPtr.Zero,0))return;
+    int code=Marshal.GetLastWin32Error();
+    Log.Write("경고: 커서 다시 읽기(SPI_SETCURSORS, action=0x0057) 실패 (코드 0x"+code.ToString("X8")+", Marshal.GetLastWin32Error()="+code+"). "+(attempt==0?"fWinIni=0으로 다시 시도합니다.":"레지스트리 설정은 보존되며 다음 로그인에 반영됩니다."));
+   }
+  }
   public static void Broadcast() { IntPtr r; SendMessageTimeout(new IntPtr(0xffff),0x1a,IntPtr.Zero,"ImmersiveColorSet",2,2000,out r); SendMessageTimeout(new IntPtr(0xffff),0x1a,IntPtr.Zero,"Environment",2,2000,out r); }
   [DllImport("msi.dll",CharSet=CharSet.Unicode)] static extern uint MsiOpenDatabase(string path,IntPtr persist,out uint database);
   [DllImport("msi.dll",CharSet=CharSet.Unicode)] static extern uint MsiDatabaseOpenView(uint database,string query,out uint view);
@@ -71,8 +85,8 @@ namespace EasyRetro {
   [DllImport("advapi32.dll",SetLastError=true)] static extern bool GetTokenInformation(IntPtr token,int information,out int value,int size,out int returned);
   [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
   public static bool ProcessElevated(IntPtr process) {
-   IntPtr token;Check(OpenProcessToken(process,8,out token));
-   try{int value,returned;Check(GetTokenInformation(token,20,out value,4,out returned));return value!=0;}
+   IntPtr token;Check(OpenProcessToken(process,8,out token),"프로세스 토큰 열기(OpenProcessToken)");
+   try{int value,returned;Check(GetTokenInformation(token,20,out value,4,out returned),"프로세스 권한 확인(GetTokenInformation)");return value!=0;}
    finally{CloseHandle(token);}
   }
  }

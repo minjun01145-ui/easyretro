@@ -50,8 +50,8 @@ namespace EasyRetro {
   static readonly string[] Names={"Arrow","Help","AppStarting","Wait","Crosshair","IBeam","NWPen","No","SizeNS","SizeWE","SizeNWSE","SizeNESW","SizeAll","UpArrow","Hand","Pin","Person"};
   static string[] Select() {using(RegistryKey k=Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Control Panel\Cursors\Schemes")) {if(k==null)throw new InvalidOperationException("내장 커서 스킴 없음");foreach(string preferred in new[]{"Windows Standard (large)","Windows Standard (extra large)","Windows Black"}){string value=k.GetValue(preferred,null,RegistryValueOptions.DoNotExpandEnvironmentNames) as string;if(value==null)continue;string[] paths=value.Split(',');bool valid=paths.Length>=Names.Length;for(int i=0;valid&&i<Names.Length;i++)if(paths[i].Length>0&&!File.Exists(Environment.ExpandEnvironmentVariables(paths[i])))valid=false;if(valid)return paths;}throw new InvalidOperationException("기존 비-aero 내장 커서 파일을 찾을 수 없습니다.");}}
   public override List<Setting> Settings(ThemeSpec t,ApplyContext c) {string[] files=Select();List<Setting> values=new List<Setting>{new Setting(@"Control Panel\Cursors","",t.XP?"EasyRetro XP (Windows Standard)":"EasyRetro 98 (Windows Standard)"),new Setting(@"Control Panel\Cursors","Scheme Source",0)};for(int i=0;i<Names.Length;i++)values.Add(new Setting(@"Control Panel\Cursors",Names[i],Environment.ExpandEnvironmentVariables(files[i])));return values;}
-  public override void Apply(ThemeSpec t,ApplyContext c) {base.Apply(t,c);NativeMethods.Check(NativeMethods.SystemParametersInfo(0x57,0,IntPtr.Zero,3));}
-  public override void Restore(RegistryBackup b,ApplyContext c) {base.Restore(b,c);NativeMethods.Check(NativeMethods.SystemParametersInfo(0x57,0,IntPtr.Zero,3));}
+  public override void Apply(ThemeSpec t,ApplyContext c) {base.Apply(t,c);NativeMethods.ReloadCursors();}
+  public override void Restore(RegistryBackup b,ApplyContext c) {base.Restore(b,c);NativeMethods.ReloadCursors();}
  }
  internal sealed class ExplorerPatcherModule:RegistryModule {
   public override string Id {get{return "ExplorerPatcher";}}

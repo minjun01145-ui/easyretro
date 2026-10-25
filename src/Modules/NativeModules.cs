@@ -10,7 +10,7 @@ namespace EasyRetro {
   public override List<Setting> Settings(ThemeSpec t,ApplyContext c){return new List<Setting>{new Setting(@"Control Panel\Desktop","Wallpaper",t.XP?Path.Combine(c.Assets,"wallpaper-xp.png"):""),new Setting(@"Control Panel\Desktop","WallpaperStyle",t.XP?"10":"0"),new Setting(@"Control Panel\Desktop","TileWallpaper","0"),new Setting(@"Control Panel\Colors","Background",t.XP?"70 142 219":"0 128 128")};}
   public override IEnumerable<string> Plan(ThemeSpec t,ApplyContext c){foreach(string s in base.Plan(t,c))yield return s;yield return "SPI_SETDESKWALLPAPER + 즉시 배경색; IDesktopWallpaper 모니터별 배경/슬라이드쇼 및 원본 캐시 캡처";}
   public override void Backup(RegistryBackup b,ApplyContext c){base.Backup(b,c);b.CaptureKey(Id,@"Control Panel\Desktop");b.CaptureKey(Id,@"Software\Microsoft\Windows\CurrentVersion\Themes");b.CaptureKey(Id,@"Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers");WallpaperState.Backup(b.Folder);}
-  public override void Apply(ThemeSpec t,ApplyContext c){base.Apply(t,c);NativeMethods.Check(NativeMethods.SpiString(0x14,0,t.XP?Path.Combine(c.Assets,"wallpaper-xp.png"):"",3));NativeMethods.Check(NativeMethods.SetSysColors(1,new[]{1},new[]{ThemeSpec.Bgr(t.XP?Color.FromArgb(70,142,219):Color.Teal)}));}
+  public override void Apply(ThemeSpec t,ApplyContext c){base.Apply(t,c);NativeMethods.Check(NativeMethods.SpiString(0x14,0,t.XP?Path.Combine(c.Assets,"wallpaper-xp.png"):"",3),"배경 설정(SPI_SETDESKWALLPAPER, action=0x0014)");NativeMethods.Check(NativeMethods.SetSysColors(1,new[]{1},new[]{ThemeSpec.Bgr(t.XP?Color.FromArgb(70,142,219):Color.Teal)}),"배경색 설정(SetSysColors)");}
   public override void Restore(RegistryBackup b,ApplyContext c){
    // APIs can normalize cached registry values; exact kind/data must be restored last.
    try{WallpaperState.Restore(b.Folder);}finally{base.Restore(b,c);}
@@ -21,8 +21,8 @@ namespace EasyRetro {
   public override List<Setting> Settings(ThemeSpec t,ApplyContext c){List<Setting> values=new List<Setting>();Color[] colors=t.Colors();for(int i=0;i<colors.Length;i++)values.Add(new Setting(@"Control Panel\Colors",ThemeSpec.ColorNames[i],ThemeSpec.Rgb(colors[i])));return values;}
   public override IEnumerable<string> Plan(ThemeSpec t,ApplyContext c){foreach(string s in base.Plan(t,c))yield return s;yield return "GetSysColor 원본 캡처 / SetSysColors 즉시 적용";}
   public override void Backup(RegistryBackup b,ApplyContext c){base.Backup(b,c);int[] colors=new int[ThemeSpec.ColorIndexes.Length];for(int i=0;i<colors.Length;i++)colors[i]=NativeMethods.GetSysColor(ThemeSpec.ColorIndexes[i]);StateStore.WriteJson(Path.Combine(b.Folder,"syscolors.json"),colors);}
-  public override void Apply(ThemeSpec t,ApplyContext c){base.Apply(t,c);Color[] colors=t.Colors();int[] raw=new int[colors.Length];for(int i=0;i<raw.Length;i++)raw[i]=ThemeSpec.Bgr(colors[i]);NativeMethods.Check(NativeMethods.SetSysColors(raw.Length,ThemeSpec.ColorIndexes,raw));}
-  public override void Restore(RegistryBackup b,ApplyContext c){try{int[] colors=StateStore.ReadJson<int[]>(Path.Combine(b.Folder,"syscolors.json"));NativeMethods.Check(NativeMethods.SetSysColors(colors.Length,ThemeSpec.ColorIndexes,colors));}finally{base.Restore(b,c);}}
+  public override void Apply(ThemeSpec t,ApplyContext c){base.Apply(t,c);Color[] colors=t.Colors();int[] raw=new int[colors.Length];for(int i=0;i<raw.Length;i++)raw[i]=ThemeSpec.Bgr(colors[i]);NativeMethods.Check(NativeMethods.SetSysColors(raw.Length,ThemeSpec.ColorIndexes,raw),"시스템 색상 설정(SetSysColors)");}
+  public override void Restore(RegistryBackup b,ApplyContext c){try{int[] colors=StateStore.ReadJson<int[]>(Path.Combine(b.Folder,"syscolors.json"));NativeMethods.Check(NativeMethods.SetSysColors(colors.Length,ThemeSpec.ColorIndexes,colors),"시스템 색상 복구(SetSysColors)");}finally{base.Restore(b,c);}}
  }
  internal sealed class FontsModule:RegistryModule {
   public override string Id {get{return "Fonts";}}

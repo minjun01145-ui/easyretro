@@ -32,8 +32,12 @@ namespace EasyRetro {
    Plan(state==null?"98":state.appliedTheme??"98",false);Plan(state==null?"xp":state.appliedTheme??"xp",true);
   }
   void Attempt(Action action,List<Exception> errors){try{action();}catch(Exception error){errors.Add(error);Report(error.ToString());}}
-  void RestoreInstallerSettings(RegistryBackup backup,List<Exception> errors) {
-   foreach(string name in new[]{"OpenShell","ExplorerPatcher","InstallerOS","InstallerEP"}){string module=name;Attempt(delegate{backup.Restore(module);},errors);}
+  static bool Captured(RegistryBackup backup,IModule module){return backup.HasModule(module.Id)||(module.Id=="Shell"&&File.Exists(Path.Combine(backup.Folder,"shell-user.txt")));}
+  void RestoreInstallerSettings(RegistryBackup backup,List<Exception> errors,Predicate<string> attempted) {
+   foreach(string name in new[]{"OpenShell","ExplorerPatcher","InstallerOS","InstallerEP"}) {
+    string module=name,owner=name=="InstallerOS"?"OpenShell":name=="InstallerEP"?"ExplorerPatcher":name;
+    if(backup.HasModule(module)&&attempted(owner))Attempt(delegate{backup.Restore(module);},errors);
+   }
   }
   void RemoveRollbackFolder(string folder){try{if(Directory.Exists(folder))StateStore.DeleteDirectory(folder);}catch(IOException error){Report("완료된 트랜잭션 임시 백업 정리 보류: "+error.Message);}catch(UnauthorizedAccessException error){Report("완료된 트랜잭션 임시 백업 정리 보류: "+error.Message);}}
   public void Apply(string id) {
@@ -50,26 +54,26 @@ namespace EasyRetro {
    foreach(IModule module in modules)module.Backup(before,context);Dependencies.Backup(before);ComponentFiles.Backup(folder);SelfInstall.Backup(before);
    if(!first)StateStore.WriteJson(Path.Combine(folder,"previous-state.json"),previous);
    before.Save();state.operation="applying";state.completedModules.Clear();store.Save(state);
-   List<IModule> attempted=new List<IModule>();bool managerAttempted=false;
+   List<IModule> attempted=new List<IModule>();bool managerAttempted=false;string failedStep="에셋 게시";
    try {
-    Dependencies.Prepare(state,store);Report("에셋 게시 (XP 원본은 스냅샷 전에 다운로드/검증 완료)");AssetGenerator.Ensure(context.Assets);if(xp!=null)XpAssets.Publish(xp,context.Assets);
-    foreach(IModule module in modules){Report(module.Id+" 적용");attempted.Add(module);state.completedModules.Add(module.Id);store.Save(state);module.Apply(theme,context);}
-    managerAttempted=true;state.selfInstallPending=true;store.Save(state);SelfInstall.Install();
+    failedStep="구성요소 준비";Dependencies.Prepare(state,store);failedStep="에셋 게시";Report("에셋 게시 (XP 원본은 스냅샷 전에 다운로드/검증 완료)");AssetGenerator.Ensure(context.Assets);if(xp!=null)XpAssets.Publish(xp,context.Assets);
+    foreach(IModule module in modules){failedStep=module.Id;Report(module.Id+" 적용");attempted.Add(module);state.completedModules.Add(module.Id);store.Save(state);module.Apply(theme,context);}
+    failedStep="매니저 설치";managerAttempted=true;state.selfInstallPending=true;store.Save(state);SelfInstall.Install();
     state.selfInstallPending=false;state.appliedTheme=id;state.operation="applied";store.Save(state);
    }catch(Exception error) {
     Report("적용 실패: "+error);List<Exception> errors=new List<Exception>();
     Attempt(delegate{XpAssets.Rollback(context.Assets,folder);},errors);
     // Include the failing module: it may have mutated several values before throwing.
-    for(int i=attempted.Count-1;i>=0;i--){IModule module=attempted[i];Attempt(delegate{module.Restore(before,context);},errors);}
-    foreach(Dependency dependency in new[]{Dependencies.OS,Dependencies.EP})if(!present[dependency.Id]){Dependency item=dependency;Attempt(delegate{Dependencies.Remove(item,state,store);},errors);}
-    RestoreInstallerSettings(before,errors);
+    for(int i=attempted.Count-1;i>=0;i--){IModule module=attempted[i];if(Captured(before,module))Attempt(delegate{module.Restore(before,context);},errors);}
+    foreach(Dependency dependency in new[]{Dependencies.OS,Dependencies.EP})if(!present[dependency.Id]&&attempted.Exists(delegate(IModule m){return m.Id==(dependency==Dependencies.OS?"OpenShell":"ExplorerPatcher");})){Dependency item=dependency;Attempt(delegate{Dependencies.Remove(item,state,store);},errors);}
+    RestoreInstallerSettings(before,errors,delegate(string name){return attempted.Exists(delegate(IModule m){return m.Id==name;});});
     if(managerAttempted)Attempt(delegate{SelfInstall.Rollback(before);state.selfInstallPending=false;store.Save(state);},errors);
     if(attempted.Count>0)Attempt(ShellRestart.Restart,errors);
     Attempt(delegate{ComponentFiles.Restore(folder,state);},errors);
     if(errors.Count==0) {
      if(first)store.CleanTheme();else{store.Save(StateStore.ReadJson<AppState>(Path.Combine(folder,"previous-state.json")));RemoveRollbackFolder(folder);}
-    }else{state.operation="recovery-required";state.appliedTheme=priorTheme;store.Save(state);throw new AggregateException("적용 및 롤백 실패. 백업을 보존했습니다. 매니저의 원래대로 복구를 실행하세요.",new[]{error,new AggregateException(errors)});}
-    throw;
+    }else{state.operation="recovery-required";state.appliedTheme=priorTheme;store.Save(state);throw new AggregateException("적용 실패 단계: "+failedStep+". 롤백 중 오류가 발생했습니다. 백업을 보존했습니다. --verify로 남아 있는 변경을 확인하고 매니저의 원래대로 복구를 실행하세요.",new[]{error,new AggregateException(errors)});}
+    throw new InvalidOperationException("적용 실패 단계: "+failedStep+". 시스템을 적용 이전 상태로 복구했습니다.",error);
    }
    // Cleanup is not part of apply: failure deleting a temp backup must never undo committed success.
    if(!first)RemoveRollbackFolder(folder);CompletionNotice=xp==null?"":xp.Notice;Report("완료: "+id);if(!string.IsNullOrEmpty(CompletionNotice))Report(CompletionNotice);
@@ -80,10 +84,11 @@ namespace EasyRetro {
    if(state.operation=="cleaning"){store.CleanTheme();Report("완료된 복구의 임시 파일 정리 완료");return;}
    RegistryBackup original=new RegistryBackup(store.PathFor("backup"),true);ApplyContext context=Context(state);
    state.operation="restoring";store.Save(state);List<Exception> errors=new List<Exception>();
-   for(int i=modules.Count-1;i>=0;i--){IModule module=modules[i];Report(module.Id+" 원본 복구");Attempt(delegate{module.Restore(original,context);},errors);}
-   foreach(Dependency dependency in new[]{Dependencies.OS,Dependencies.EP}){Dependency item=dependency;Attempt(delegate{Dependencies.Remove(item,state,store);},errors);}
+   Predicate<string> attempted=delegate(string name){return state.appliedTheme!=null||state.completedModules.Contains(name);};
+   for(int i=modules.Count-1;i>=0;i--){IModule module=modules[i];if(!attempted(module.Id)||!Captured(original,module))continue;Report(module.Id+" 원본 복구");Attempt(delegate{module.Restore(original,context);},errors);}
+   foreach(Dependency dependency in new[]{Dependencies.OS,Dependencies.EP})if(attempted(dependency==Dependencies.OS?"OpenShell":"ExplorerPatcher")){Dependency item=dependency;Attempt(delegate{Dependencies.Remove(item,state,store);},errors);}
    // Uninstallers can recreate settings; restore their captured keys AFTER removal.
-   RestoreInstallerSettings(original,errors);
+   RestoreInstallerSettings(original,errors,attempted);
    if(state.selfInstallPending)Attempt(delegate{string path=store.PathFor("rollback");RegistryBackup manager=File.Exists(Path.Combine(path,"previous-state.json"))?new RegistryBackup(path,true):original;SelfInstall.Rollback(manager);state.selfInstallPending=false;store.Save(state);},errors);
    // Always last, including failed uninstall: replace any shell launched by EP itself.
    Attempt(ShellRestart.Restart,errors);

@@ -18,7 +18,7 @@ namespace EasyRetro {
   void RefreshState(){AppState state=StateStore.Default().Load();current.Text=state==null?"테마를 선택하면 한 번에 적용합니다. 원래 설정은 첫 적용 전에 보관합니다.":"EasyRetro 매니저 · 현재 테마: "+(state.appliedTheme=="xp"?"Windows XP":state.appliedTheme=="98"?"Windows 98":"복구 필요")+(state.operation=="applied"?"":" · 중단된 작업이 있습니다. 먼저 복구하세요.");restore.Visible=state!=null;cards.Enabled=state==null||state.operation=="applied";}
   async void Run(string action,string theme){
    Enabled=false;
-   try{int code=await Task.Run(delegate{return Program.Elevate(action,theme);});RefreshState();if(code==1223)MessageBox.Show(this,"관리자 권한 요청을 취소했습니다. 설정은 변경되지 않았습니다.","EasyRetro",MessageBoxButtons.OK,MessageBoxIcon.Information);else if(code!=0)MessageBox.Show(this,"작업을 완료하지 못했습니다. 진행창의 안내와 로그를 확인하세요.\n\n로그: "+StateStore.Default().PathFor("logs"),"EasyRetro",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
+   try{int code=await Task.Run(delegate{return Program.Elevate(action,theme);});RefreshState();if(Program.ElevationFailureMessage!=null)MessageBox.Show(this,Program.ElevationFailureMessage,"EasyRetro",MessageBoxButtons.OK,code==1223?MessageBoxIcon.Information:MessageBoxIcon.Warning);else if(code!=0)MessageBox.Show(this,"작업을 완료하지 못했습니다. 진행창의 안내와 로그를 확인하세요.\n\n로그: "+StateStore.Default().PathFor("logs"),"EasyRetro",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
    catch(Exception error){MessageBox.Show(this,Log.Failure(error),"EasyRetro · 오류",MessageBoxButtons.OK,MessageBoxIcon.Error);}
    finally{Enabled=true;Activate();}
   }

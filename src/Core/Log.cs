@@ -39,15 +39,19 @@ namespace EasyRetro {
  }
  internal static class Processes {
   public static string Q(string s) {return "\""+s.Replace("\"","\\\"")+"\"";}
+  static void Output(string command,string text){using(StringReader reader=new StringReader(text)){string line;while((line=reader.ReadLine())!=null)if(line.Length>0)Log.Write(command+" "+line);}}
   public static int Run(string file,string args,string workingDirectory=null,params int[] accepted) {
    ProcessStartInfo info=new ProcessStartInfo(file,args){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
    if(workingDirectory!=null)info.WorkingDirectory=workingDirectory;
-   using(Process p=Process.Start(info)) {
+   string command="[cmd] "+file+" "+args;Process started;
+   try{started=Process.Start(info);}catch(Exception error){Log.Write(command+" 실행 실패: "+error.Message);throw;}
+   using(Process p=started) {
     // Drain both pipes concurrently: a noisy installer must not deadlock on stderr.
     System.Threading.Tasks.Task<string> output=p.StandardOutput.ReadToEndAsync(),error=p.StandardError.ReadToEndAsync();
     p.WaitForExit();string text=output.Result,errors=error.Result;
-    if(text.Length>0)Log.Write(text.Trim());if(errors.Length>0)Log.Write(errors.Trim());
-    if(p.ExitCode!=0&&!Array.Exists(accepted,delegate(int code){return code==p.ExitCode;}))throw new InvalidOperationException("외부 프로그램 실행 실패: "+file+" (종료 코드 "+p.ExitCode+") "+errors);
+    if(p.ExitCode!=0){Log.Write(command+" (종료 코드 "+p.ExitCode+")");Output(command,text);}
+    Output(command,errors);
+    if(p.ExitCode!=0&&!Array.Exists(accepted,delegate(int code){return code==p.ExitCode;}))throw new InvalidOperationException("외부 프로그램 실행 실패: "+command+" (종료 코드 "+p.ExitCode+") "+errors);
     return p.ExitCode;
    }
   }
