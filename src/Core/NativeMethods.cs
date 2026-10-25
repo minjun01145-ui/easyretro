@@ -28,7 +28,7 @@ namespace EasyRetro {
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd,out uint pid);
   [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern IntPtr SendMessageTimeout(IntPtr hwnd,uint msg,IntPtr w,string l,uint flags,uint timeout,out IntPtr result);
   [DllImport("kernel32.dll")] public static extern bool AttachConsole(int pid);
-  [DllImport("kernel32.dll")] public static extern bool AllocConsole();
+  [DllImport("kernel32.dll")] public static extern bool SetConsoleOutputCP(uint codePage);
   [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)] public struct LOGFONT { public int height,width,escapement,orientation,weight; public byte italic,underline,strikeOut,charSet,outPrecision,clipPrecision,quality,pitch; [MarshalAs(UnmanagedType.ByValTStr,SizeConst=32)] public string face; }
   [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)] public struct NONCLIENTMETRICS { public int size,border,scrollWidth,scrollHeight,captionWidth,captionHeight; public LOGFONT caption; public int smallCaptionWidth,smallCaptionHeight; public LOGFONT smallCaption; public int menuWidth,menuHeight; public LOGFONT menu,status,message; public int paddedBorder; }
   public static byte[] SpiGet(uint action,int size) {

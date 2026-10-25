@@ -3,11 +3,33 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 namespace EasyRetro {
+ // GUI and runas workers never access Console streams, including through logging.
+ internal static class ConsoleOutput {
+  static bool enabled;
+  public static void Attach() {
+   try {
+    if(!NativeMethods.AttachConsole(-1))return;
+    if(!NativeMethods.SetConsoleOutputCP(65001))return;
+    Console.OutputEncoding=new UTF8Encoding(false);
+    enabled=true;
+   }catch(IOException){/* A console is optional, even for command-line modes. */}
+   catch(UnauthorizedAccessException){/* Console setup must not prevent startup. */}
+   catch(System.Security.SecurityException){/* Restricted console access is optional. */}
+  }
+  public static void WriteLine(string message) {
+   if(!enabled)return;
+   try{Console.WriteLine(message);}catch(IOException){/* A closed parent console is harmless. */}catch(ObjectDisposedException){/* The parent may exit during work. */}
+  }
+  public static void WriteError(string message) {
+   if(!enabled)return;
+   try{Console.Error.WriteLine(message);}catch(IOException){/* Preserve the original error. */}catch(ObjectDisposedException){/* Preserve the original error. */}
+  }
+ }
  internal static class Log {
   static readonly object Gate=new object(); public static string FilePath;
   public static void Start(StateStore s) {Directory.CreateDirectory(s.PathFor("logs")); FilePath=s.PathFor("logs/easyretro-"+DateTime.Now.ToString("yyyyMMdd")+".log");}
   public static void Write(string message) {
-   Console.WriteLine(message);
+   ConsoleOutput.WriteLine(message);
    lock(Gate){if(FilePath!=null)try{File.AppendAllText(FilePath,DateTime.Now.ToString("o")+" "+message+Environment.NewLine,Encoding.UTF8);}catch(IOException){/* Logging must never interrupt rollback, including a full disk. */}catch(UnauthorizedAccessException){/* Preserve the original operation error. */}}
   }
   public static string Failure(Exception error) {

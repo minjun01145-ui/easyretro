@@ -12,6 +12,8 @@ Windows 11을 Windows 98 / Windows XP 분위기로 바꾸는 작은 테마 도�
 
 적용 전 작업을 저장하세요. 설정을 반영하려고 탐색기를 재시작하므로 열려 있던 탐색기 창이 닫힐 수 있습니다. 회사·업무용 PC보다 복구 가능한 개인 테스트 환경에서 먼저 사용하기를 권장합니다.
 
+**v0.1.1:** 콘솔 없이 실행한 매니저와 UAC 승격 작업에서 콘솔 인코딩/스트림에 접근하지 않도록 수정했습니다. 상태·계획·자체 검사·도움말만 부모 콘솔 연결에 성공한 경우 UTF-8로 출력하며, 콘솔 연결/출력 실패는 실행을 중단하지 않습니다.
+
 ### 유지하는 Windows 11 기능
 
 - 기본 파일 탐색기를 계속 사용하므로 **탭 기능 유지**. 레거시 리본/명령바 설정은 변경하지 않습니다.
@@ -110,9 +112,10 @@ EasyRetro.exe --dry-run --apply 98
 EasyRetro.exe --dry-run --apply xp
 EasyRetro.exe --dry-run --restore
 EasyRetro.exe --selftest
+EasyRetro.exe --help
 ```
 
-위 명령은 테마/레지스트리 설정을 바꾸거나 구성요소를 설치하지 않습니다. `--selftest`는 임시 폴더에 미리보기/98 에셋을 생성하고 **모든 XP 원본 URL과 미러를 각각 실제 다운로드**해 URL별 PASS/FAIL·SHA-256·크기를 출력합니다. 원본 이미지 변환, 모든 WAV의 RIFF/fmt/data 헤더(Windows 호환 PCM/ADPCM), 기존 두 의존성 해시와 OS 빌드도 검사합니다. 어느 URL이든 실패하거나 대체 에셋이 필요하면 실패 종료합니다. 검사 결과의 임시 폴더는 이미지 확인 후 직접 지워도 됩니다. `--dry-run --apply xp`는 각 원본/미러 URL·해시·대상 파일과 이벤트 매핑을 나열하고 다운로드하지 않습니다. PowerShell 5에서 한글 계획 출력을 파이프로 읽는 경우 먼저 `[Console]::OutputEncoding = [Text.UTF8Encoding]::new()`를 설정하세요.
+위 명령은 테마/레지스트리 설정을 바꾸거나 구성요소를 설치하지 않습니다. `--selftest`는 임시 폴더에 미리보기/98 에셋을 생성하고 **모든 XP 원본 URL과 미러를 각각 실제 다운로드**해 URL별 PASS/FAIL·SHA-256·크기를 출력합니다. 원본 이미지 변환, 모든 WAV의 RIFF/fmt/data 헤더(Windows 호환 PCM/ADPCM), 기존 두 의존성 해시와 OS 빌드도 검사합니다. 어느 URL이든 실패하거나 대체 에셋이 필요하면 실패 종료합니다. 검사 결과의 임시 폴더는 이미지 확인 후 직접 지워도 됩니다. `--dry-run --apply xp`는 각 원본/미러 URL·해시·대상 파일과 이벤트 매핑을 나열하고 다운로드하지 않습니다. CLI는 부모 콘솔에 연결한 뒤 출력 코드 페이지를 UTF-8(65001)로 바꾸므로 한국어 CP949 콘솔에서도 한글을 표시합니다. PowerShell 5에서 출력을 파이프로 읽는 경우 먼저 `[Console]::OutputEncoding = [Text.UTF8Encoding]::new()`를 설정하세요. 부모 콘솔이 없으면 콘솔 출력 없이 실행하며, GUI와 실제 적용/복구/제거 작업은 콘솔을 사용하지 않습니다.
 
 실제 작업용 CLI는 `--apply 98|xp`, `--restore`, `--uninstall`이며 필요한 경우 자동으로 UAC 승격합니다. 중복 작업은 차단합니다.
 
