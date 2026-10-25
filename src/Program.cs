@@ -1,0 +1,33 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Security.Principal;
+using System.Text;
+using System.Threading;
+using System.Windows.Forms;
+namespace EasyRetro {
+ internal static class Program {
+  static string Sid {get{return WindowsIdentity.GetCurrent().User.Value;}}
+  internal static int Elevate(string action,string theme){ProcessStartInfo info=new ProcessStartInfo(Application.ExecutablePath,action+(theme==null?"":" "+theme)+" --user-sid "+Sid);info.UseShellExecute=true;info.Verb="runas";using(Process child=Process.Start(info)){child.WaitForExit();return child.ExitCode;}}
+  [STAThread] static int Main(string[] args){bool cli=args.Length>0;try {
+   if(cli){NativeMethods.AttachConsole(-1);Console.OutputEncoding=new UTF8Encoding(false);}
+   NativeMethods.WindowsBuild();Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
+   bool dry=false,self=false,status=false;string action=null,theme=null,originalSid=null;
+   for(int i=0;i<args.Length;i++){switch(args[i]){case "--dry-run":dry=true;break;case "--selftest":self=true;break;case "--status":status=true;break;case "--apply":if(action!=null||i+1>=args.Length)throw new ArgumentException("--apply 98|xp");action=args[i];theme=args[++i];ThemeSpec.Get(theme);break;case "--restore":case "--uninstall":if(action!=null)throw new ArgumentException("한 번에 한 작업만 가능합니다.");action=args[i];break;case "--user-sid":if(i+1>=args.Length)throw new ArgumentException("사용자 SID 누락");originalSid=args[++i];break;default:throw new ArgumentException("지원하지 않는 인자: "+args[i]);}}
+   if((self?1:0)+(status?1:0)+(action==null?0:1)>1 || dry&&(action==null||action=="--uninstall"))throw new ArgumentException("인자 조합 오류");
+   bool mutation=action!=null&&!dry;
+   bool elevated=new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
+   bool created;
+   // A non-elevated CLI launcher must not hold the elevated worker's mutex while waiting for runas.
+   string name="Local\\EasyRetro-"+Sid+(mutation&&elevated?"-Action":"-Manager");
+   using(Mutex mutex=new Mutex(true,name,out created)){if(!created){if(!cli)MessageBox.Show("EasyRetro가 이미 실행 중입니다.","EasyRetro");else Console.WriteLine("EasyRetro가 이미 실행 중입니다.");return 2;}
+    try {StateStore store=StateStore.Default();Engine engine=new Engine(store,null);
+     if(dry){engine.Plan(theme??"98",action=="--restore");return 0;}if(status){engine.Status();return 0;}if(self){SelfTest();return 0;}
+     if(mutation){if(originalSid!=null&&originalSid!=Sid)throw new InvalidOperationException("다른 관리자 계정 자격증명을 사용한 권한 상승은 지원하지 않습니다. 원래 사용자 계정에서 실행하세요.");if(!new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))return Elevate(action,theme);using(ProgressForm form=new ProgressForm(action,theme)){Application.Run(form);return form.Result;}}
+     using(MainForm form=new MainForm())Application.Run(form);return 0;
+    }finally{mutex.ReleaseMutex();}
+   }
+  }catch(Exception error){if(cli)Console.Error.WriteLine(error.ToString());else MessageBox.Show(error.Message,"EasyRetro",MessageBoxButtons.OK,MessageBoxIcon.Error);return 1;}}
+  static void SelfTest(){Console.WriteLine("OS check OK: Windows 11 x64 build "+NativeMethods.WindowsBuild());string folder=Path.Combine(Path.GetTempPath(),"EasyRetro-selftest-"+Guid.NewGuid().ToString("N"));AssetGenerator.Generate(Path.Combine(folder,"assets"));Console.WriteLine("Assets generated: "+Path.Combine(folder,"assets"));foreach(Dependency d in new[]{Dependencies.EP,Dependencies.OS})Downloader.Fetch(d,Path.Combine(folder,"cache"));Console.WriteLine("PASS --selftest: assets generated; both dependencies hash-verified; OS check OK; no system settings changed.");}
+ }
+}
