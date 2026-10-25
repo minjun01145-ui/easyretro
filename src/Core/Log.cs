@@ -6,10 +6,28 @@ namespace EasyRetro {
  internal static class Log {
   static readonly object Gate=new object(); public static string FilePath;
   public static void Start(StateStore s) {Directory.CreateDirectory(s.PathFor("logs")); FilePath=s.PathFor("logs/easyretro-"+DateTime.Now.ToString("yyyyMMdd")+".log");}
-  public static void Write(string message) {Console.WriteLine(message);lock(Gate) {if(FilePath!=null) File.AppendAllText(FilePath,DateTime.Now.ToString("o")+" "+message+Environment.NewLine,Encoding.UTF8);}}
+  public static void Write(string message) {
+   Console.WriteLine(message);
+   lock(Gate){if(FilePath!=null)try{File.AppendAllText(FilePath,DateTime.Now.ToString("o")+" "+message+Environment.NewLine,Encoding.UTF8);}catch(IOException){/* Logging must never interrupt rollback, including a full disk. */}catch(UnauthorizedAccessException){/* Preserve the original operation error. */}}
+  }
+  public static string Failure(Exception error) {
+   if(FilePath==null)try{Start(StateStore.Default());}catch(IOException){FilePath=Path.Combine(Path.GetTempPath(),"easyretro-error.log");}catch(UnauthorizedAccessException){FilePath=Path.Combine(Path.GetTempPath(),"easyretro-error.log");}
+   Write(error.ToString());return "작업을 완료하지 못했습니다. 오류 내용을 확인한 후 다시 시도하세요.\n\n"+error.Message+"\n\n로그: "+FilePath;
+  }
  }
  internal static class Processes {
   public static string Q(string s) {return "\""+s.Replace("\"","\\\"")+"\"";}
-  public static int Run(string file,string args) {ProcessStartInfo info=new ProcessStartInfo(file,args);info.UseShellExecute=false;info.CreateNoWindow=true;info.RedirectStandardOutput=true;info.RedirectStandardError=true;using(Process p=Process.Start(info)) {string output=p.StandardOutput.ReadToEnd();string error=p.StandardError.ReadToEnd();p.WaitForExit();if(output.Length>0)Log.Write(output.Trim());if(p.ExitCode!=0 && p.ExitCode!=3010 && p.ExitCode!=1605)throw new InvalidOperationException(file+" 종료 코드 "+p.ExitCode+": "+error);return p.ExitCode;}}
+  public static int Run(string file,string args,string workingDirectory=null,params int[] accepted) {
+   ProcessStartInfo info=new ProcessStartInfo(file,args){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
+   if(workingDirectory!=null)info.WorkingDirectory=workingDirectory;
+   using(Process p=Process.Start(info)) {
+    // Drain both pipes concurrently: a noisy installer must not deadlock on stderr.
+    System.Threading.Tasks.Task<string> output=p.StandardOutput.ReadToEndAsync(),error=p.StandardError.ReadToEndAsync();
+    p.WaitForExit();string text=output.Result,errors=error.Result;
+    if(text.Length>0)Log.Write(text.Trim());if(errors.Length>0)Log.Write(errors.Trim());
+    if(p.ExitCode!=0&&!Array.Exists(accepted,delegate(int code){return code==p.ExitCode;}))throw new InvalidOperationException("외부 프로그램 실행 실패: "+file+" (종료 코드 "+p.ExitCode+") "+errors);
+    return p.ExitCode;
+   }
+  }
  }
 }

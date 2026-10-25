@@ -48,20 +48,15 @@ namespace EasyRetro {
   public override string Id {get{return "ExplorerPatcher";}}
   public override List<Setting> Settings(ThemeSpec t,ApplyContext c){return Dependencies.Taskbar(t);}
   public override IEnumerable<string> Plan(ThemeSpec t,ApplyContext c){yield return "기존 EP 재사용; 없으면 "+Dependencies.EP.Version+" 다운로드/SHA-256 검증 → "+Dependencies.EP.InstallArgs;foreach(string s in base.Plan(t,c))yield return s;yield return "탐색기 리본/명령바 옵션 변경 없음 (탭 유지)";}
-  public override void Backup(RegistryBackup b,ApplyContext c){b.CaptureKey(Id,Dependencies.EPKey);base.Backup(b,c);}
+  public override void Backup(RegistryBackup b,ApplyContext c){b.CaptureKey(Id,Dependencies.EPKey);b.CaptureKey(Id,Dependencies.Advanced);b.CaptureKey(Id,@"Software\Microsoft\Windows\CurrentVersion\Explorer\StuckRects3");b.CaptureKey(Id,@"Software\Microsoft\Windows\CurrentVersion\Explorer\MMStuckRects3");b.Capture(Id,@"Software\Classes\CLSID\{2cc5ca98-6485-489a-920e-b3e88a6ccce3}\ShellFolder","Attributes");base.Backup(b,c);}
   public override void Apply(ThemeSpec t,ApplyContext c){Dependencies.Install(Dependencies.EP,c.State,c.Store);base.Apply(t,c);}
  }
  internal sealed class OpenShellModule:RegistryModule {
   public override string Id {get{return "OpenShell";}}
   public override List<Setting> Settings(ThemeSpec t,ApplyContext c){return Dependencies.Menu(t,c.Assets);}
   public override IEnumerable<string> Plan(ThemeSpec t,ApplyContext c){yield return "기존 Open-Shell 재사용; 없으면 "+Dependencies.OS.Version+" 다운로드/SHA-256 검증 → "+Dependencies.OS.InstallArgs;foreach(string s in base.Plan(t,c))yield return s;}
-  public override void Backup(RegistryBackup b,ApplyContext c){b.CaptureKey(Id,@"Software\OpenShell\StartMenu");base.Backup(b,c);}
-  public override void Apply(ThemeSpec t,ApplyContext c){Dependencies.Install(Dependencies.OS,c.State,c.Store);base.Apply(t,c);Reload();}
-  public override void Restore(RegistryBackup b,ApplyContext c){base.Restore(b,c);Reload();}
-  static void Reload() {
-   // https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/StartMenu/StartMenu.cpp#L564
-   string exe=Dependencies.OpenShellPath();
-   if(File.Exists(exe)) Processes.Run(exe,"-reloadsettings");
-  }
+  public override void Backup(RegistryBackup b,ApplyContext c){b.CaptureKey(Id,@"Software\OpenShell");b.Capture(Id,@"Software\Microsoft\Windows\CurrentVersion\Explorer\StartPage","OpenAtLogon");base.Backup(b,c);}
+  public override void Apply(ThemeSpec t,ApplyContext c){Dependencies.Install(Dependencies.OS,c.State,c.Store);ShellRestart.StopMenu();base.Apply(t,c);}
+  public override void Restore(RegistryBackup b,ApplyContext c){ShellRestart.StopMenu();base.Restore(b,c);}
  }
 }

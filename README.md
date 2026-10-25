@@ -29,7 +29,7 @@ Windows 11을 Windows 98 / Windows XP 분위기로 바꾸는 작은 테마 도�
 - 복구 후 매니저는 남아 다시 테마를 선택할 수 있습니다.
 - EasyRetro까지 지우려면 **설정 → 앱 → 설치된 앱 → EasyRetro → 제거**를 사용합니다. 먼저 테마를 복구한 뒤 바로가기와 앱 등록을 제거하고, 열려 있는 매니저가 모두 닫힌 후 설치 파일을 삭제합니다.
 
-오류가 나면 적용 중이던 모듈을 역순으로 되돌립니다. 복구 자체가 실패하면 백업을 삭제하지 않습니다. 매니저에서 복구를 다시 시도하고 `%LOCALAPPDATA%\EasyRetro\logs`의 로그를 확인하세요. **적용 중에는 `state.json`이나 `backup` 폴더를 지우지 마세요.**
+오류가 나면 실패 도중 일부만 변경된 모듈까지 포함해 역순으로 되돌립니다. 첫 적용 실패는 최초 상태로, 테마 전환 실패는 전환 직전 테마로 되돌리고 최초 Windows 백업은 보존합니다. 구성요소 설치 직전의 부분 설치 저널(MSI ProductCode 포함), 자기설치 변경도 복구 대상입니다. 전원 차단·프로세스 종료로 중단되면 매니저에서 **원래대로 복구**를 실행하세요. 복구 자체가 실패하거나 원본 백업 파일이 없으면 나머지 복구를 계속하고 백업과 상태를 삭제하지 않습니다. 복구 완료 후 파일 정리 도중 중단된 경우에는 다음 복구에서 정리만 다시 수행합니다. `%LOCALAPPDATA%\EasyRetro\logs`의 로그를 확인하세요. **적용 중에는 `state.json`이나 `backup` 폴더를 지우지 마세요.**
 
 Windows 업데이트나 다른 테마 도구가 설정을 다시 바꾸면 결과가 달라질 수 있습니다. 복구는 EasyRetro가 보관한 최초 값 기준이며, 적용 후 다른 도구로 변경한 같은 설정도 원본으로 돌아갑니다.
 
@@ -43,6 +43,8 @@ Windows 업데이트나 다른 테마 도구가 설정을 다시 바꾸면 결�
 | [Open-Shell](https://github.com/Open-Shell/Open-Shell-Menu) | 시작메뉴 기능만 (`ADDLOCAL=StartMenu`). Classic Explorer / Classic IE 미설치 | [4.4.198](https://github.com/Open-Shell/Open-Shell-Menu/releases/tag/v4.4.198) · [MIT](https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/LICENSE), Ivo Beltchev 및 Open-Shell 팀 크레딧은 공식 배포물 참조 |
 
 ExplorerPatcher의 공식 `/uninstall_silent`는 초기 확인을 생략하지만 **완료·재시작·오류 창이 추가로 뜰 수 있습니다**. 이 창은 upstream 동작이며 EasyRetro가 강제로 숨기거나 자동 클릭하지 않습니다.
+
+Open-Shell은 `NOSTART=1`로 설치한 뒤 기존 시작메뉴 프로세스를 종료하고 설정을 기록합니다. 첫 실행 스타일 선택창을 표시하지 않으며 마지막 쉘 재시작 이후 일반 권한으로 시작합니다. EP 설치 프로그램이 먼저 탐색기를 재시작하더라도, EasyRetro가 **설치 → 설정 기록 → 최종 쉘 재시작** 순서로 다시 반영합니다.
 
 ExplorerPatcher의 공식 릴리스는 **Smart App Control이 켜진 환경과 SentinelOne 설치 환경에서 쉘 시작/제거 문제가 생길 수 있음**을 경고합니다. 해당 환경에서는 사용하지 마세요. EasyRetro는 백신 예외를 추가하거나 보안 기능을 끄지 않습니다. [공식 릴리스 주의사항](https://github.com/valinet/ExplorerPatcher/releases/tag/26100.8457.70.3)을 먼저 확인하세요.
 
@@ -62,7 +64,8 @@ EasyRetro 자체의 소스와 런타임 생성 에셋은 [MIT](LICENSE)입니다
 - Windows 11의 둥근 창 모서리, Mica, 일부 UWP / WinUI 앱(설정 앱 등)은 클래식 색상·글꼴을 따르지 않습니다.
 - 창 테두리 비트맵 스킨, 비서명 msstyles, 시스템 파일 테마 패치는 v0.1 범위 밖입니다. **진짜 XP 창 테두리를 완전히 복제하지 않습니다.** 카드 이미지는 분위기를 설명하는 미리보기입니다.
 - ExplorerPatcher는 일부 백신이 오탐할 수 있고, Windows 대형 업데이트 직후 새 호환 버전이 필요할 수 있습니다. 고정 버전이 현재 Windows 업데이트와 맞는지 테스트 VM에서 먼저 확인하세요.
-- 다중 모니터별 배경/슬라이드쇼 구성의 완전한 재현은 보장하지 않습니다. XP 배경은 실행 시 주 모니터 해상도로 생성합니다. Windows가 비활성화한 로그인/로그오프 소리는 스킴을 설정해도 재생되지 않을 수 있습니다.
+- 고정 EP 설치 프로그램 자체가 탐색기를 종료하고 다시 띄우며, 같은 사용자로 상승 실행할 때 **잠시 상승된 탐색기가 존재할 가능성**이 있습니다. EasyRetro의 마지막 단계는 EP가 띄운 것을 포함해 **현재 세션의 모든 탐색기 프로세스**를 종료하고, 자동 재시작 또는 `/RL LIMITED /IT` 예약 작업으로 일반 권한 쉘을 시작한 뒤 토큰을 확인합니다. 다른 세션의 프로세스는 종료하지 않습니다. EP 자체의 재시작 동작을 없애는 옵션은 upstream에 없습니다. [고정 설치 소스](https://github.com/valinet/ExplorerPatcher/blob/26100.8457.70.3/ep_setup/ep_setup.c) · [upstream 쉘 시작 코드](https://github.com/valinet/ExplorerPatcher/blob/26100.8457.70.3/ExplorerPatcher/utility.h)
+- 모니터별 원본 배경, 슬라이드쇼 목록·간격·셔플·사용 상태와 배경 캐시를 별도로 보관합니다. 복구 시 원본 모니터/슬라이드쇼 폴더에 접근할 수 없으면 백업을 보존하고 오류를 안내합니다. XP 배경은 실행 시 주 모니터 해상도로 생성합니다. Windows가 비활성화한 로그인/로그오프 소리는 스킴을 설정해도 재생되지 않을 수 있습니다.
 - 이 버전의 실기기 검증은 빌드, 무변경 계획 출력, 생성 이미지 확인, 격리 레지스트리 복구, 일반 권한 GUI까지입니다. 실제 적용/제거 및 탐색기 재시작은 사용자의 PC 보호를 위해 실행하지 않았습니다. VM에서 통합 검증 후 사용하세요.
 
 ## 고급 사용 · 데이터 위치
@@ -82,9 +85,11 @@ EasyRetro.exe --selftest
 - 매니저: `%LOCALAPPDATA%\Programs\EasyRetro\EasyRetro.exe`
 - 상태·원본 백업: `%LOCALAPPDATA%\EasyRetro\state.json`, `backup\`
 - 생성 에셋: `assets\`, 검증된 다운로드 캐시: `cache\`, 로그: `logs\`
-- 복구 성공 시 상태·백업·생성 에셋을 삭제하고 로그와 캐시는 남깁니다.
+- 복구 성공 시 상태·원본/전환 백업·생성 에셋과 새로 설치한 구성요소의 사용자 캐시를 정리하고 로그와 다운로드 캐시는 남깁니다. 기존 구성요소는 제거하지 않으며, 새 설치 전부터 존재한 캐시는 원본대로 복원합니다.
 
 레지스트리 값/설치 명령의 고정 버전 출처는 [`src/Core/Dependencies.cs`](src/Core/Dependencies.cs)에 있습니다. Open-Shell 스킨 활성화 값은 `CustomTaskbar`이며, Classic 스타일의 실제 스킨 이름은 `Classic Skin`입니다.
+
+원본 스냅샷에는 두 테마가 사용하는 값뿐 아니라 SPI가 간접 변경하는 Desktop/WindowMetrics, 배경·테마 캐시, EP/Open-Shell 설정 트리와 설치 프로그램이 변경하는 정책/RunOnce, HKLM 자동실행·ShellServiceObject·COM 등록 값도 포함합니다. 최초 원본 스냅샷은 전환 중 덮어쓰지 않습니다. 백업 JSON은 임시 파일을 디스크에 플러시한 뒤 원자적으로 교체합니다. EP 제거 캐시 파일을 지웠다면 검증된 설치 파일을 다시 내려받기 위해 인터넷이 필요합니다.
 
 ## 소스에서 빌드
 

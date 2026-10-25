@@ -8,10 +8,17 @@ using System.Windows.Forms;
 namespace EasyRetro {
  internal static class Program {
   static string Sid {get{return WindowsIdentity.GetCurrent().User.Value;}}
-  internal static int Elevate(string action,string theme){ProcessStartInfo info=new ProcessStartInfo(Application.ExecutablePath,action+(theme==null?"":" "+theme)+" --user-sid "+Sid);info.UseShellExecute=true;info.Verb="runas";using(Process child=Process.Start(info)){child.WaitForExit();return child.ExitCode;}}
+  internal static int Elevate(string action,string theme){
+   ProcessStartInfo info=new ProcessStartInfo(Application.ExecutablePath,action+(theme==null?"":" "+theme)+" --user-sid "+Sid){UseShellExecute=true,Verb="runas"};
+   try{using(Process child=Process.Start(info)){child.WaitForExit();return child.ExitCode;}}
+   catch(System.ComponentModel.Win32Exception error){if(error.NativeErrorCode!=1223)throw;Console.WriteLine("관리자 권한 요청을 취소했습니다. 설정은 변경되지 않았습니다.");return 1223;}
+  }
   [STAThread] static int Main(string[] args){bool cli=args.Length>0;try {
    if(cli){NativeMethods.AttachConsole(-1);Console.OutputEncoding=new UTF8Encoding(false);}
    NativeMethods.WindowsBuild();Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
+   AppContext.SetSwitch("Switch.System.Windows.Forms.DoNotSupportDpiChanges",false);
+   Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+   Application.ThreadException+=delegate(object sender,ThreadExceptionEventArgs eventArgs){MessageBox.Show(Log.Failure(eventArgs.Exception),"EasyRetro · 오류",MessageBoxButtons.OK,MessageBoxIcon.Error);};
    bool dry=false,self=false,status=false;string action=null,theme=null,originalSid=null;
    for(int i=0;i<args.Length;i++){switch(args[i]){case "--dry-run":dry=true;break;case "--selftest":self=true;break;case "--status":status=true;break;case "--apply":if(action!=null||i+1>=args.Length)throw new ArgumentException("--apply 98|xp");action=args[i];theme=args[++i];ThemeSpec.Get(theme);break;case "--restore":case "--uninstall":if(action!=null)throw new ArgumentException("한 번에 한 작업만 가능합니다.");action=args[i];break;case "--user-sid":if(i+1>=args.Length)throw new ArgumentException("사용자 SID 누락");originalSid=args[++i];break;default:throw new ArgumentException("지원하지 않는 인자: "+args[i]);}}
    if((self?1:0)+(status?1:0)+(action==null?0:1)>1 || dry&&(action==null||action=="--uninstall"))throw new ArgumentException("인자 조합 오류");
@@ -27,7 +34,7 @@ namespace EasyRetro {
      using(MainForm form=new MainForm())Application.Run(form);return 0;
     }finally{mutex.ReleaseMutex();}
    }
-  }catch(Exception error){if(cli)Console.Error.WriteLine(error.ToString());else MessageBox.Show(error.Message,"EasyRetro",MessageBoxButtons.OK,MessageBoxIcon.Error);return 1;}}
+  }catch(Exception error){string message=Log.Failure(error);if(cli)Console.Error.WriteLine(message);if(!cli||Array.IndexOf(args,"--user-sid")>=0)MessageBox.Show(message,"EasyRetro · 오류",MessageBoxButtons.OK,MessageBoxIcon.Error);return 1;}}
   static void SelfTest(){Console.WriteLine("OS check OK: Windows 11 x64 build "+NativeMethods.WindowsBuild());string folder=Path.Combine(Path.GetTempPath(),"EasyRetro-selftest-"+Guid.NewGuid().ToString("N"));AssetGenerator.Generate(Path.Combine(folder,"assets"));Console.WriteLine("Assets generated: "+Path.Combine(folder,"assets"));foreach(Dependency d in new[]{Dependencies.EP,Dependencies.OS})Downloader.Fetch(d,Path.Combine(folder,"cache"));Console.WriteLine("PASS --selftest: assets generated; both dependencies hash-verified; OS check OK; no system settings changed.");}
  }
 }

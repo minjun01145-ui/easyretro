@@ -49,5 +49,31 @@ namespace EasyRetro {
   public static byte[] Encode<T>(T value) { int size=Marshal.SizeOf(typeof(T)); IntPtr p=Marshal.AllocHGlobal(size); try {Marshal.StructureToPtr(value,p,false); byte[] b=new byte[size]; Marshal.Copy(p,b,0,size); return b;} finally {Marshal.FreeHGlobal(p);} }
   public static void Check(bool ok) { if(!ok) throw new Win32Exception(Marshal.GetLastWin32Error()); }
   public static void Broadcast() { IntPtr r; SendMessageTimeout(new IntPtr(0xffff),0x1a,IntPtr.Zero,"ImmersiveColorSet",2,2000,out r); SendMessageTimeout(new IntPtr(0xffff),0x1a,IntPtr.Zero,"Environment",2,2000,out r); }
+  [DllImport("msi.dll",CharSet=CharSet.Unicode)] static extern uint MsiOpenDatabase(string path,IntPtr persist,out uint database);
+  [DllImport("msi.dll",CharSet=CharSet.Unicode)] static extern uint MsiDatabaseOpenView(uint database,string query,out uint view);
+  [DllImport("msi.dll")] static extern uint MsiViewExecute(uint view,uint record);
+  [DllImport("msi.dll")] static extern uint MsiViewFetch(uint view,out uint record);
+  [DllImport("msi.dll",CharSet=CharSet.Unicode)] static extern uint MsiRecordGetString(uint record,uint field,StringBuilder value,ref uint length);
+  [DllImport("msi.dll")] static extern uint MsiCloseHandle(uint handle);
+  static void MsiCheck(uint result){if(result!=0)throw new InvalidOperationException("Open-Shell MSI 원본 정보 읽기 실패: "+result);}
+  public static string MsiProductCode(string path) {
+   uint database=0,view=0,record=0;
+   try {
+    MsiCheck(MsiOpenDatabase(path,IntPtr.Zero,out database));
+    MsiCheck(MsiDatabaseOpenView(database,"SELECT `Value` FROM `Property` WHERE `Property`='ProductCode'",out view));
+    MsiCheck(MsiViewExecute(view,0));MsiCheck(MsiViewFetch(view,out record));
+    StringBuilder value=new StringBuilder(39);uint length=(uint)value.Capacity;MsiCheck(MsiRecordGetString(record,1,value,ref length));
+    Guid code;if(!Guid.TryParse(value.ToString(),out code))throw new InvalidOperationException("Open-Shell MSI ProductCode가 올바르지 않습니다.");
+    return code.ToString("B");
+   }finally{if(record!=0)MsiCloseHandle(record);if(view!=0)MsiCloseHandle(view);if(database!=0)MsiCloseHandle(database);}
+  }
+  [DllImport("advapi32.dll",SetLastError=true)] static extern bool OpenProcessToken(IntPtr process,uint access,out IntPtr token);
+  [DllImport("advapi32.dll",SetLastError=true)] static extern bool GetTokenInformation(IntPtr token,int information,out int value,int size,out int returned);
+  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+  public static bool ProcessElevated(IntPtr process) {
+   IntPtr token;Check(OpenProcessToken(process,8,out token));
+   try{int value,returned;Check(GetTokenInformation(token,20,out value,4,out returned));return value!=0;}
+   finally{CloseHandle(token);}
+  }
  }
 }
