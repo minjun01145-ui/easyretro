@@ -61,7 +61,7 @@ namespace EasyRetro {
   public static ComponentState Detect(Dependency d) {
    foreach(RegistryView view in new[]{RegistryView.Registry64,RegistryView.Registry32})using(RegistryKey h=RegistryKey.OpenBaseKey(RegistryHive.LocalMachine,view))using(RegistryKey u=h.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall")) {if(u==null)continue;foreach(string n in u.GetSubKeyNames())using(RegistryKey k=u.OpenSubKey(n)) {string name=Convert.ToString(k.GetValue("DisplayName"));if((d==EP && name.IndexOf("ExplorerPatcher",StringComparison.OrdinalIgnoreCase)>=0)||(d==OS && name.IndexOf("Open-Shell",StringComparison.OrdinalIgnoreCase)>=0)) return new ComponentState{version=Convert.ToString(k.GetValue("DisplayVersion")),productCode=n};}}
    if(d==OS && File.Exists(OpenShellPath()))return new ComponentState{version="existing"};
-   if(d==EP && Directory.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"ExplorerPatcher")))return new ComponentState{version="existing"};return null;
+   return null;
   }
   public static void Prepare(AppState state,StateStore store) {foreach(Dependency d in new[]{EP,OS}) {if(state.components.ContainsKey(d.Id))continue;ComponentState c=Detect(d);if(c==null)c=new ComponentState{installedByUs=true,version=d.Version,installer=Downloader.Fetch(d,store.PathFor("cache"))};state.components[d.Id]=c;store.Save(state);}}
   public static void Install(Dependency d,AppState state,StateStore store) {
@@ -69,12 +69,30 @@ namespace EasyRetro {
    if(Detect(d)!=null)return;
    if(!c.installedByUs)throw new InvalidOperationException(d.Id+" 기존 설치를 찾을 수 없습니다. 해당 구성요소를 다시 설치하거나 원래대로 복구하세요.");
    if(!File.Exists(c.installer)||Downloader.Hash(c.installer)!=d.Sha256)throw new InvalidDataException(d.Id+" 설치 직전 SHA-256 검증 실패");
+   // Persist before launch: EP can leave partial files even when no uninstall entry was written.
+   c.installPending=true;
+   store.Save(state);
    Processes.Run(c.installer,d.InstallArgs);
    ComponentState found=Detect(d);
    if(found==null)throw new InvalidOperationException(d.Id+" 설치 확인 실패");
    c.productCode=found.productCode;c.version=found.version;
+   c.installPending=false;
    store.Save(state);
   }
-  public static void Remove(Dependency d,AppState state) {ComponentState c;if(!state.components.TryGetValue(d.Id,out c)||!c.installedByUs)return;if(Detect(d)==null)return;if(d==OS) {if(string.IsNullOrEmpty(c.productCode)) {ComponentState found=Detect(d);c.productCode=found==null?null:found.productCode;}Guid code;if(!Guid.TryParse(c.productCode,out code))throw new InvalidOperationException("Open-Shell MSI ProductCode를 찾을 수 없습니다.");Processes.Run("msiexec.exe","/x "+c.productCode+" /qn /norestart");}else {if(!File.Exists(c.installer)||Downloader.Hash(c.installer)!=d.Sha256)throw new InvalidDataException("EP 제거 파일 검증 실패");Processes.Run(c.installer,d.UninstallArgs);}}
+  public static void Remove(Dependency d,AppState state) {
+   ComponentState c;
+   if(!state.components.TryGetValue(d.Id,out c)||!c.installedByUs)return;
+   ComponentState found=Detect(d);
+   if(found==null && (d==OS || !c.installPending))return;
+   if(d==OS) {
+    if(string.IsNullOrEmpty(c.productCode))c.productCode=found.productCode;
+    Guid code;
+    if(!Guid.TryParse(c.productCode,out code))throw new InvalidOperationException("Open-Shell MSI ProductCode를 찾을 수 없습니다.");
+    Processes.Run("msiexec.exe","/x "+c.productCode+" /qn /norestart");
+   }else {
+    if(!File.Exists(c.installer)||Downloader.Hash(c.installer)!=d.Sha256)throw new InvalidDataException("EP 제거 파일 검증 실패");
+    Processes.Run(c.installer,d.UninstallArgs);
+   }
+  }
  }
 }
