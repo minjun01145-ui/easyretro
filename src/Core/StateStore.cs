@@ -4,7 +4,7 @@ using System.IO;
 using System.Text;
 using System.Web.Script.Serialization;
 namespace EasyRetro {
- public sealed class ComponentState { public bool installedByUs,installPending,installPlanned; public string version,productCode,installer,msi; }
+ public sealed class ComponentState { public bool installedByUs,installPending,installPlanned; public string version,productCode,installer,msi,uninstallCommand; }
  public sealed class AppState { public int version=1; public bool selfInstallPending; public string appliedTheme,snapshotCreatedUtc,operation; public Dictionary<string,ComponentState> components=new Dictionary<string,ComponentState>(); public List<string> completedModules=new List<string>(); }
  public sealed class StateStore {
   public readonly string Root;

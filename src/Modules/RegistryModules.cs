@@ -20,6 +20,11 @@ namespace EasyRetro {
    byte[] palette=new byte[32];
    // Eight COLORREF entries: RGB bytes followed by a zero reserved byte (not alpha).
    for(int i=0;i<8;i++){palette[i*4]=t.Accent.R;palette[i*4+1]=t.Accent.G;palette[i*4+2]=t.Accent.B;}
+   // No invented DwmWindowCornerPreference registry override: DWMWCP_DONOTROUND is a
+   // per-window API enum, not a documented HKCU setting. EP's apparent switch installs
+   // a uDWM-patching service rather than a setting we can capture/restore:
+   // https://github.com/valinet/ExplorerPatcher/blob/26100.8457.70.3/ep_gui/GUI.c#L419-L421
+   // https://github.com/valinet/ExplorerPatcher/blob/26100.8457.70.3/ExplorerPatcher/utility.c#L616-L700
    return new List<Setting>{new Setting(dwm,"AccentColor",unchecked((int)0xff000000)|ThemeSpec.Bgr(t.Accent)),new Setting(dwm,"ColorizationColor",t.Accent.ToArgb()),new Setting(dwm,"ColorPrevalence",1),new Setting(p,"ColorPrevalence",1),new Setting(p,"EnableTransparency",0),new Setting(p,"AppsUseLightTheme",1),new Setting(p,"SystemUsesLightTheme",1),new Setting(accent,"AccentPalette",palette),new Setting(accent,"AccentColorMenu",unchecked((int)0xff000000)|ThemeSpec.Bgr(t.Accent))};
   }
   public override void Apply(ThemeSpec t,ApplyContext c){base.Apply(t,c);NativeMethods.Broadcast();}public override void Restore(RegistryBackup b,ApplyContext c){base.Restore(b,c);NativeMethods.Broadcast();}

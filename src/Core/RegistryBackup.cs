@@ -135,6 +135,13 @@ namespace EasyRetro {
    }
    if(errors.Count>0)throw new AggregateException("레지스트리 복구 실패: "+module,errors);
   }
+  public void RestoreExports() {
+   List<Exception> errors=new List<Exception>();
+   foreach(string path in Directory.GetFiles(Folder,"key-*.reg")) {
+    string file=path;Item(file,delegate{Log.Write("인덱스 없이 남은 레지스트리 원본 병합: "+file);Processes.Run("reg.exe","import "+Processes.Q(file));},errors,false);
+   }
+   if(errors.Count>0)throw new AggregateException("남은 .reg 원본 병합 실패",errors);
+  }
   void CaptureMissingParents(string hive,string path) {
    while(path.Length>0) {
     using(RegistryKey k=Root(hive).OpenSubKey(path))if(k!=null)break;

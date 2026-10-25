@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Microsoft.Win32;
 namespace EasyRetro {
- internal sealed class Dependency { public string Id,Version,Url,Sha256,InstallArgs,UninstallArgs; }
+ internal sealed class Dependency { public string Id,Version,Url,Sha256,InstallArgs,UninstallArgs; public string RegistryPath=@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"; }
  internal static class Dependencies {
   // Windows registry contracts used by the modules (HKCU unless explicitly marked HKLM):
   // Control Panel\Colors: all 30 ColorNames in ThemeSpec.cs (RGB strings), and Desktop Wallpaper,
@@ -46,22 +46,38 @@ namespace EasyRetro {
   // ALL EP values: https://github.com/valinet/ExplorerPatcher/blob/26100.8457.70.3/ep_gui/resources/settings.reg#L8-L99
   // OldTaskbar=2 is the reimplemented Win10 taskbar required on 24H2+: https://github.com/valinet/ExplorerPatcher/wiki/ExplorerPatcher%27s-taskbar-implementation
   // OldTaskbarAl/MMOldTaskbarAl=0 left alignment; TaskbarGlomLevel/MMTaskbarGlomLevel=0 always combine; TaskbarSmallIcons=1/0.
+  // Compact mode already uses the supported Advanced\TaskbarSmallIcons=1, not an invented EP value:
+  // https://github.com/valinet/ExplorerPatcher/blob/26100.8457.70.3/ep_gui/resources/settings.reg#L97-L102
   public static List<Setting> Taskbar(ThemeSpec t) {return new List<Setting>{new Setting(EPKey,"OldTaskbar",NativeMethods.WindowsBuild()>=25921?2:1),new Setting(EPKey,"OldTaskbarAl",0),new Setting(EPKey,"MMOldTaskbarAl",0),new Setting(Advanced,"TaskbarGlomLevel",0),new Setting(Advanced,"MMTaskbarGlomLevel",0),new Setting(Advanced,"TaskbarSmallIcons",t.XP?0:1)};}
   // Every Open-Shell value below is defined here (pinned, not master):
   // https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/StartMenu/StartMenuDLL/SettingsUI.cpp#L4135-L4482
   // MenuStyle Classic1/Classic2 (L4137); WinKey ClassicMenu / ShiftWin WindowsMenu (L4179/L4187);
   // SearchBox Normal and SearchPrograms=1 (L4367/L4378); SkinC1/SkinC2 (L4435/L4440);
   // EnableStartButton, StartButtonType CustomButton, StartButtonPath, StartButtonSize (L4450-L4458);
-  // CustomTaskbar (NOT SkinTaskbar), TaskbarLook Opaque, TaskbarTexture, TaskbarTextColor, TaskbarTileH/V Stretch (L4465-L4482).
+  // CustomTaskbar (NOT SkinTaskbar), TaskbarLook Opaque, TaskbarTexture, TaskbarTextColor;
+  // TaskbarTileH/V accept Tile (0) or Stretch (1), not arbitrary sizing modes:
+  // https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/StartMenu/StartMenuDLL/SettingsUI.cpp#L4475-L4481
   // Radio settings use REG_SZ names; bool/color/int use DWORD, paths strings:
   // https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/Lib/Settings.cpp#L154-L205
   // Shipped names Classic Skin and Windows XP Luna: https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/Setup/Setup.wxs#L522-L540
   // ShowedStyle2 prevents first-use style UI: Src/Lib/Settings.cpp#L1962-L1966.
-  public static List<Setting> Menu(ThemeSpec t,string assets) {return new List<Setting>{new Setting(@"Software\OpenShell\StartMenu","ShowedStyle2",1),new Setting(OSKey,"MenuStyle",t.XP?"Classic2":"Classic1"),new Setting(OSKey,"SkinC1","Classic Skin"),new Setting(OSKey,"SkinC2","Windows XP Luna"),new Setting(OSKey,"EnableStartButton",1),new Setting(OSKey,"StartButtonType","CustomButton"),new Setting(OSKey,"StartButtonPath",Path.Combine(assets,"start-"+t.Id+".png")),new Setting(OSKey,"StartButtonSize",0),new Setting(OSKey,"CustomTaskbar",1),new Setting(OSKey,"TaskbarLook","Opaque"),new Setting(OSKey,"TaskbarTexture",Path.Combine(assets,"taskbar-"+t.Id+".png")),new Setting(OSKey,"TaskbarTextColor",t.XP?0xffffff:0),new Setting(OSKey,"TaskbarTileH","Stretch"),new Setting(OSKey,"TaskbarTileV","Stretch"),new Setting(OSKey,"SearchBox","Normal"),new Setting(OSKey,"SearchPrograms",1),new Setting(OSKey,"WinKey","ClassicMenu"),new Setting(OSKey,"ShiftWin","WindowsMenu")};}
+  public static List<Setting> Menu(ThemeSpec t,string assets) {return new List<Setting>{new Setting(@"Software\OpenShell\StartMenu","ShowedStyle2",1),new Setting(OSKey,"MenuStyle",t.XP?"Classic2":"Classic1"),new Setting(OSKey,"SkinC1","Classic Skin"),new Setting(OSKey,"SkinC2","Windows XP Luna"),new Setting(OSKey,"EnableStartButton",1),new Setting(OSKey,"StartButtonType","CustomButton"),new Setting(OSKey,"StartButtonPath",Path.Combine(assets,"start-"+t.Id+".png")),new Setting(OSKey,"StartButtonSize",0),new Setting(OSKey,"CustomTaskbar",1),new Setting(OSKey,"TaskbarLook","Opaque"),new Setting(OSKey,"TaskbarTexture",Path.Combine(assets,"taskbar-"+t.Id+".png")),new Setting(OSKey,"TaskbarTextColor",t.XP?0xffffff:0),new Setting(OSKey,"TaskbarTileH","Tile"),new Setting(OSKey,"TaskbarTileV","Stretch"),new Setting(OSKey,"SearchBox","Normal"),new Setting(OSKey,"SearchPrograms",1),new Setting(OSKey,"WinKey","ClassicMenu"),new Setting(OSKey,"ShiftWin","WindowsMenu")};}
   public static string OpenShellPath() {using(RegistryKey k=Registry.LocalMachine.OpenSubKey(@"SOFTWARE\OpenShell\OpenShell")){string p=k==null?null:k.GetValue("Path") as string;return Path.Combine(p??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"Open-Shell"),"StartMenu.exe");}}
+  static bool IsOpenShell(Dependency d){return d.Id==OS.Id;}
   public static ComponentState Detect(Dependency d) {
-   foreach(RegistryView view in new[]{RegistryView.Registry64,RegistryView.Registry32})using(RegistryKey h=RegistryKey.OpenBaseKey(RegistryHive.LocalMachine,view))using(RegistryKey u=h.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall")) {if(u==null)continue;foreach(string n in u.GetSubKeyNames())using(RegistryKey k=u.OpenSubKey(n)) {string name=Convert.ToString(k.GetValue("DisplayName"));if((d==EP && name.IndexOf("ExplorerPatcher",StringComparison.OrdinalIgnoreCase)>=0)||(d==OS && name.IndexOf("Open-Shell",StringComparison.OrdinalIgnoreCase)>=0)) return new ComponentState{version=Convert.ToString(k.GetValue("DisplayVersion")),productCode=n};}}
-   if(d==OS && File.Exists(OpenShellPath()))return new ComponentState{version="existing"};
+   foreach(RegistryHive hive in new[]{RegistryHive.CurrentUser,RegistryHive.LocalMachine})
+   foreach(RegistryView view in new[]{RegistryView.Registry64,RegistryView.Registry32})
+   using(RegistryKey h=RegistryKey.OpenBaseKey(hive,view))using(RegistryKey u=h.OpenSubKey(d.RegistryPath)) {
+    if(u==null)continue;
+    foreach(string n in u.GetSubKeyNames())using(RegistryKey k=u.OpenSubKey(n)) {
+     if(k==null)continue;string name=Convert.ToString(k.GetValue("DisplayName"));
+     if(name.IndexOf(IsOpenShell(d)?"Open-Shell":"ExplorerPatcher",StringComparison.OrdinalIgnoreCase)<0)continue;
+     string command=Convert.ToString(k.GetValue("QuietUninstallString"));
+     if(string.IsNullOrWhiteSpace(command))command=Convert.ToString(k.GetValue("UninstallString"));
+     return new ComponentState{version=Convert.ToString(k.GetValue("DisplayVersion")),productCode=n,uninstallCommand=command};
+    }
+   }
+   if(IsOpenShell(d)&&File.Exists(OpenShellPath()))return new ComponentState{version="existing"};
    return null;
   }
   public static void Backup(RegistryBackup backup) {
@@ -130,24 +146,58 @@ namespace EasyRetro {
    if(!string.IsNullOrEmpty(found.productCode))c.productCode=found.productCode;
    c.version=found.version;c.installPending=false;store.Save(state);
   }
-  public static void Remove(Dependency d,AppState state,StateStore store) {
-   ComponentState c;if(!state.components.TryGetValue(d.Id,out c)||!c.installedByUs)return;
-   ComponentState found=Detect(d);
-   bool files=d==OS?File.Exists(OpenShellPath()):File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),"dxgi.dll"));
-   if(found==null&&!c.installPending&&!files)return;
-   c.installPending=true;store.Save(state);
-   if(d==OS) {
-    if(string.IsNullOrEmpty(c.productCode)&&found!=null)c.productCode=found.productCode;
-    Guid code;if(!Guid.TryParse(c.productCode,out code))throw new InvalidOperationException("Open-Shell MSI ProductCode를 찾을 수 없습니다. 백업을 보존했습니다.");
-    Processes.Run("msiexec.exe","/x "+c.productCode+" /qn /norestart",null,3010,1605,1614);
+  internal static string[] UninstallCommand(string command,string defaultArgs) {
+   command=Environment.ExpandEnvironmentVariables(command??"").Trim();
+   string file,args;
+   if(command.StartsWith("\"",StringComparison.Ordinal)) {
+    int end=command.IndexOf('"',1);if(end<0)throw new InvalidDataException("제거 명령의 닫는 따옴표가 없습니다: "+command);
+    file=command.Substring(1,end-1);args=command.Substring(end+1).Trim();
    }else {
-    // A deleted cache must not make otherwise valid restore impossible.
-    c.installer=Downloader.Fetch(EP,Path.GetDirectoryName(c.installer));
-    Processes.Run(c.installer,d.UninstallArgs);
+    int end=command.IndexOf(".exe",StringComparison.OrdinalIgnoreCase);
+    if(end<0)throw new InvalidDataException("제거 실행 파일 경로를 확인할 수 없습니다: "+command);
+    file=command.Substring(0,end+4);args=command.Substring(end+4).Trim();
    }
-   bool remaining=d==OS?File.Exists(OpenShellPath()):File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),"dxgi.dll"));
-   if(Detect(d)!=null||remaining)throw new InvalidOperationException(d.Id+" 제거 확인 실패. 다시 복구하세요.");
-   c.installPending=false;store.Save(state);
+   if(!Path.IsPathRooted(file))file=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),file);
+   if(!File.Exists(file))throw new FileNotFoundException("등록된 제거 실행 파일이 없습니다.",file);
+   return new[]{file,args.Length==0?defaultArgs:args};
+  }
+  static void RegisteredRemove(Dependency d,string command) {
+   string[] parsed=UninstallCommand(command,IsOpenShell(d)?"/qn /norestart":d.UninstallArgs);
+   Log.Write("오프라인 등록 제거 프로그램: "+Processes.Q(parsed[0])+" "+parsed[1]);
+   Processes.Run(parsed[0],parsed[1],null,3010,1605,1614);
+  }
+  static bool ComponentFilesRemain(Dependency d){return File.Exists(IsOpenShell(d)?OpenShellPath():Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),"dxgi.dll"));}
+  public static string Remove(Dependency d,AppState state,StateStore store) {
+   ComponentState c;if(!state.components.TryGetValue(d.Id,out c)||!c.installedByUs)return null;
+   ComponentState found=Detect(d);
+   if(found==null&&!c.installPending&&!ComponentFilesRemain(d))return null;
+   c.installPending=true;store.Save(state);
+   List<Exception> failures=new List<Exception>();bool removed=false;
+   string registered=found==null?c.uninstallCommand:found.uninstallCommand;
+   if(found!=null&&!string.IsNullOrEmpty(found.uninstallCommand))c.uninstallCommand=found.uninstallCommand;
+   if(IsOpenShell(d)) {
+    if(string.IsNullOrEmpty(c.productCode)&&found!=null)c.productCode=found.productCode;
+    Guid code;
+    if(Guid.TryParse(c.productCode,out code))try {
+     Processes.Run("msiexec.exe","/x "+code.ToString("B")+" /qn /norestart",null,3010,1605,1614);removed=true;
+    }catch(Exception error){failures.Add(error);Log.Write(error.Message);}
+   }
+   if(!removed&&!string.IsNullOrWhiteSpace(registered))try {RegisteredRemove(d,registered);removed=true;}catch(Exception error){failures.Add(error);Log.Write(error.Message);}
+   if(!removed&&!IsOpenShell(d)) {
+    // Registry first; then hash-verified cache/offline directory; network is the last resort only.
+    try {
+     string cache=store.PathFor("cache");
+     if(!string.IsNullOrEmpty(c.installer)&&File.Exists(c.installer)&&Downloader.Hash(c.installer)==d.Sha256) {
+      Processes.Run(c.installer,d.UninstallArgs,null,3010);removed=true;
+     }else {c.installer=Downloader.Fetch(d,cache);Processes.Run(c.installer,d.UninstallArgs,null,3010);removed=true;}
+    }catch(Exception error){failures.Add(error);Log.Write(error.Message);}
+   }
+   if(IsOpenShell(d))try {ShellRestart.StopMenu();}catch(Exception error){failures.Add(error);Log.Write(error.Message);}
+   if(Detect(d)==null&&!ComponentFilesRemain(d)) {c.installPending=false;store.Save(state);return null;}
+   string path=registered;
+   if(string.IsNullOrWhiteSpace(path))path=IsOpenShell(d)?OpenShellPath():Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),@"ExplorerPatcher\ep_setup.exe");
+   string warning=(IsOpenShell(d)?"Open-Shell":"ExplorerPatcher")+": 설정 → 앱에서 제거하거나 "+path+" 를 실행하세요.";
+   Log.Write("경고: "+warning+(failures.Count==0?"":" ("+failures[failures.Count-1].Message+")"));store.Save(state);return warning;
   }
  }
 }

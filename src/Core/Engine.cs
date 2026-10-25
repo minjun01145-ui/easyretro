@@ -15,7 +15,7 @@ namespace EasyRetro {
    Report(restore?"원본 스냅샷 역순 복구; 값 kind/data 및 부재 복원; SPI 원본 재적용":"다운로드/해시 검증 → 최초 원본 스냅샷 1회 (전환 시 보존) → 트랜잭션 적용; 실패 시 현재 실행 이전 상태 복구");
    if(restore) {
     for(int i=modules.Count-1;i>=0;i--){Report("["+modules[i].Id+"] Restore (멱등)");foreach(string text in modules[i].Plan(t,context))Report("  원본 복구 대상: "+text);}
-    Report("EasyRetro가 설치한 Open-Shell만 저장된 ProductCode로 msiexec /x /qn /norestart; EP만 검증된 ep_setup /uninstall_silent (upstream 완료창 가능)");
+    Report("EasyRetro가 설치한 구성요소만 오프라인 우선 제거: Open-Shell MSI ProductCode → 등록 제거 명령; EP 등록 제거 명령 → SHA-256 검증 캐시 → --offline/EASYRETRO_OFFLINE → 마지막으로 네트워크");
     Report("제거 후 installer-side HKCU/HKLM 및 EP/Open-Shell 설정 원본 재복원 → 현재 세션의 모든 Explorer 종료 → 자동 재시작/LIMITED 일반 권한 쉘 확인");
     Report("state.json / backup / rollback / assets 삭제; logs 및 매니저 유지");
    }else {
@@ -82,19 +82,28 @@ namespace EasyRetro {
   public void Restore() {
    AppState state=store.Load();if(state==null){Report("적용된 테마가 없습니다. 복구할 변경 없음.");return;}
    if(state.operation=="cleaning"){store.CleanTheme();Report("완료된 복구의 임시 파일 정리 완료");return;}
-   RegistryBackup original=new RegistryBackup(store.PathFor("backup"),true);ApplyContext context=Context(state);
-   state.operation="restoring";store.Save(state);List<Exception> errors=new List<Exception>();
+   List<Exception> errors=new List<Exception>();List<string> leftovers=new List<string>();RegistryBackup original;bool indexMissing=false;
+   try{original=new RegistryBackup(store.PathFor("backup"),true);}catch(Exception error){indexMissing=true;errors.Add(error);Report("레지스트리 백업을 읽을 수 없음: "+error.Message);original=new RegistryBackup(store.PathFor("backup"),false);}
+   ApplyContext context=Context(state);state.operation="restoring";store.Save(state);
    Predicate<string> attempted=delegate(string name){return state.appliedTheme!=null||state.completedModules.Contains(name);};
-   for(int i=modules.Count-1;i>=0;i--){IModule module=modules[i];if(!attempted(module.Id)||!Captured(original,module))continue;Report(module.Id+" 원본 복구");Attempt(delegate{module.Restore(original,context);},errors);}
-   foreach(Dependency dependency in new[]{Dependencies.OS,Dependencies.EP})if(attempted(dependency==Dependencies.OS?"OpenShell":"ExplorerPatcher")){Dependency item=dependency;Attempt(delegate{Dependencies.Remove(item,state,store);},errors);}
+   for(int i=modules.Count-1;i>=0;i--){IModule module=modules[i];if(!attempted(module.Id))continue;Report(module.Id+" 원본 복구");Attempt(delegate{module.Restore(original,context);},errors);}
+   foreach(Dependency dependency in new[]{Dependencies.OS,Dependencies.EP})if(attempted(dependency==Dependencies.OS?"OpenShell":"ExplorerPatcher")){Dependency item=dependency;Attempt(delegate{string warning=Dependencies.Remove(item,state,store);if(warning!=null)leftovers.Add(warning);},errors);}
    // Uninstallers can recreate settings; restore their captured keys AFTER removal.
    RestoreInstallerSettings(original,errors,attempted);
+   if(indexMissing)Attempt(original.RestoreExports,errors);
    if(state.selfInstallPending)Attempt(delegate{string path=store.PathFor("rollback");RegistryBackup manager=File.Exists(Path.Combine(path,"previous-state.json"))?new RegistryBackup(path,true):original;SelfInstall.Rollback(manager);state.selfInstallPending=false;store.Save(state);},errors);
    // Always last, including failed uninstall: replace any shell launched by EP itself.
    Attempt(ShellRestart.Restart,errors);
    Attempt(delegate{ComponentFiles.Restore(original.Folder,state);},errors);
-   if(errors.Count>0)throw new AggregateException("일부 복구 실패: 백업과 상태를 보존했습니다. 다시 복구할 수 있습니다.",errors);
-   store.CleanTheme();Report("원래 Windows 설정으로 복구 완료");
+   if(errors.Count>0) {
+    CompletionNotice="남아 있는 원본은 복구했습니다. 복구하지 못한 항목 (백업/상태 보존):";
+    foreach(Exception error in errors){CompletionNotice+="\n"+error.Message;Report(error.ToString());}
+    if(leftovers.Count>0)CompletionNotice+="\n프로그램만 남음: "+string.Join("\n",leftovers);
+    throw new AggregateException(CompletionNotice,errors);
+   }
+   store.CleanTheme();
+   CompletionNotice=leftovers.Count==0?"원래 Windows 설정으로 복구 완료":"EasyRetro 설정은 모두 복구했습니다. ExplorerPatcher/Open-Shell 프로그램만 남아 있습니다:\n"+string.Join("\n",leftovers);
+   Report(CompletionNotice);
   }
  }
 }

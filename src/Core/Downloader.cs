@@ -8,6 +8,7 @@ namespace EasyRetro {
   public string Id,FileName,Sha256;public long Size;public string[] Urls;
  }
  internal static class Downloader {
+  public static string OfflineDirectory {get;set;}
   public static string Hash(string path){using(SHA256 sha=SHA256.Create())using(FileStream stream=File.OpenRead(path))return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-","").ToLowerInvariant();}
   public static string Fetch(Dependency dependency,string cache) {
    return Fetch(new PinnedArtifact{Id=dependency.Id,FileName=dependency.Id+"-"+dependency.Version+".exe",Sha256=dependency.Sha256,Urls=new[]{dependency.Url}},cache);
@@ -21,7 +22,7 @@ namespace EasyRetro {
    string part=path+".download";Directory.CreateDirectory(Path.GetDirectoryName(path));
    try {
     if(File.Exists(part))File.Delete(part);
-    using(WebClient client=new WebClient()){client.Headers[HttpRequestHeader.UserAgent]="EasyRetro/0.1";client.DownloadFile(url,part);}
+    using(WebClient client=new WebClient()){client.Headers[HttpRequestHeader.UserAgent]="EasyRetro/0.2.0";client.DownloadFile(url,part);}
     Verify(artifact,part);
     if(File.Exists(path))File.Delete(path);File.Move(part,path);
     Log.Write(artifact.Id+" SHA-256 verified: "+artifact.Sha256+" / "+url);
@@ -33,6 +34,16 @@ namespace EasyRetro {
    if(File.Exists(path)) {
     try{Verify(artifact,path);Log.Write(artifact.Id+" SHA-256 verified (cache): "+artifact.Sha256);return path;}
     catch(InvalidDataException error){Log.Write(error.Message+"; 검증되지 않은 캐시 삭제 후 원본 재시도");File.Delete(path);}
+   }
+   string offline=OfflineDirectory??Environment.GetEnvironmentVariable("EASYRETRO_OFFLINE");
+   if(!string.IsNullOrWhiteSpace(offline)) {
+    List<string> names=new List<string>{artifact.FileName};
+    foreach(string url in artifact.Urls){string name=Path.GetFileName(new Uri(url).LocalPath);if(!names.Contains(name))names.Add(name);}
+    foreach(string name in names) {
+     string source=Path.Combine(offline,name);if(!File.Exists(source))continue;
+     Verify(artifact,source);File.Copy(source,path,true);Log.Write(artifact.Id+" SHA-256 verified (offline): "+source);return path;
+    }
+    throw new FileNotFoundException("오프라인 폴더에서 검증할 설치/원본 파일을 찾을 수 없습니다: "+artifact.FileName,offline);
    }
    List<Exception> errors=new List<Exception>();
    foreach(string url in artifact.Urls)try{FetchSource(artifact,url,path);return path;}catch(Exception error){if(!(error is IOException)&&!(error is InvalidDataException)&&!(error is InvalidOperationException)&&!(error is UnauthorizedAccessException))throw;errors.Add(error);Log.Write(error.Message);}

@@ -12,9 +12,22 @@ jobs:
       - name: Build standalone executable
         shell: cmd
         run: build.cmd
+      - name: Package source and recovery tools
+        shell: pwsh
+        run: |
+          $zip = "EasyRetro-$env:GITHUB_REF_NAME-src.zip"
+          $stage = Join-Path $env:RUNNER_TEMP 'easyretro-source'
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item src, tools, docs, README.md, LICENSE, build.cmd, app.manifest -Destination $stage -Recurse
+          # Include the built executable too, so the same ZIP offers both launch and local rebuild.
+          Copy-Item dist/EasyRetro.exe -Destination $stage
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/$zip"
+          Get-ChildItem dist -File | Sort-Object Name | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
+          } | Set-Content dist/SHA256SUMS.txt -Encoding ascii
       - name: Publish GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$env:GITHUB_REF_NAME" dist/EasyRetro.exe --title "EasyRetro $env:GITHUB_REF_NAME" --generate-notes
+          gh release create "$env:GITHUB_REF_NAME" dist/EasyRetro.exe "dist/EasyRetro-$env:GITHUB_REF_NAME-src.zip" dist/SHA256SUMS.txt --title "EasyRetro $env:GITHUB_REF_NAME" --generate-notes

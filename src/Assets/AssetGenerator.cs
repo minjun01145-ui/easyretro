@@ -11,12 +11,14 @@ namespace EasyRetro {
   static readonly double[][] melodies={new[]{392.0,523.25,659.25},new[]{659.25,523.25,392.0},new[]{880.0,880.0,880.0},new[]{220.0,207.65,196.0},new[]{659.25,783.99,1046.50},new[]{523.25,392.0,261.63}};
   public static void Ensure(string folder) {
    string[] files={"start-98.png","taskbar-98.png","preview-98.png","preview-xp.png"};
-   if(Array.TrueForAll(files,delegate(string file){return File.Exists(Path.Combine(folder,file));}))return;
+   bool ready=Array.TrueForAll(files,delegate(string file){return File.Exists(Path.Combine(folder,file));});
+   if(ready)using(Image texture=Image.FromFile(Path.Combine(folder,"taskbar-98.png")))ready=texture.Width==50&&texture.Height==32;
+   if(ready)return;
    string staging=Path.Combine(Path.GetDirectoryName(folder),"asset-staging");
    if(Directory.Exists(staging))Directory.Delete(staging,true);
    try {
     Generate(staging);Directory.CreateDirectory(folder);
-    foreach(string file in files){string target=Path.Combine(folder,file);if(!File.Exists(target))File.Move(Path.Combine(staging,file),target);}
+    foreach(string file in files)File.Copy(Path.Combine(staging,file),Path.Combine(folder,file),true);
    }finally{if(Directory.Exists(staging))Directory.Delete(staging,true);}
   }
   public static void Generate(string folder) {Directory.CreateDirectory(folder);ThemeSpec classic=ThemeSpec.Get("98");using(Bitmap b=Button(classic))b.Save(Path.Combine(folder,"start-98.png"),ImageFormat.Png);using(Bitmap b=Texture(classic))b.Save(Path.Combine(folder,"taskbar-98.png"),ImageFormat.Png);foreach(string id in new[]{"98","xp"})using(Bitmap b=Preview(ThemeSpec.Get(id)))b.Save(Path.Combine(folder,"preview-"+id+".png"),ImageFormat.Png);}
@@ -39,10 +41,21 @@ namespace EasyRetro {
    }return b;
   }
   public static Bitmap Button(ThemeSpec t) {
-   // Open-Shell StartButton.cpp L587-L589: three equal vertical states: normal, hot, pressed.
+   // https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/StartMenu/StartMenuDLL/StartButton.cpp#L587-L589
+   // Exactly 108 x (3*32): no padding/resampling; the visible "start" caption is drawn below.
    Bitmap b=new Bitmap(108,96,PixelFormat.Format32bppArgb);using(Graphics g=Graphics.FromImage(b)) {g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;for(int s=0;s<3;s++) {Rectangle r=new Rectangle(0,s*32,108,32);Color top=t.XP?(s==1?Color.FromArgb(127,200,87):Color.FromArgb(94,174,63)):(s==1?Color.FromArgb(220,220,220):Color.Silver);Color bottom=t.XP?Color.FromArgb(35,111,34):Color.FromArgb(180,180,180);if(s==2){top=bottom;bottom=t.XP?Color.FromArgb(60,135,45):Color.Silver;}using(LinearGradientBrush fill=new LinearGradientBrush(r,top,bottom,90))g.FillRectangle(fill,r);ControlPaint.DrawBorder3D(g,r,s==2?Border3DStyle.Sunken:Border3DStyle.Raised);int y=s*32+(s==2?1:0);using(Pen p=new Pen(t.XP?Color.White:Color.Navy,2)) {g.DrawRectangle(p,10,y+9,13,12);g.DrawLine(p,10,y+13,23,y+13);g.DrawLine(p,14,y+21,19,y+21);}using(Font f=new Font("Tahoma",t.XP?13:11,FontStyle.Bold))using(SolidBrush text=new SolidBrush(t.XP?Color.White:Color.Black))g.DrawString(t.XP?"start":"Start",f,text,32,y+5);}}return b;
   }
-  public static Bitmap Texture(ThemeSpec t) {Bitmap b=new Bitmap(128,32);using(Graphics g=Graphics.FromImage(b)) {using(LinearGradientBrush fill=new LinearGradientBrush(new Rectangle(0,0,128,32),t.XP?Color.FromArgb(70,148,255):Color.FromArgb(215,215,215),t.XP?Color.FromArgb(20,73,183):Color.Silver,90))g.FillRectangle(fill,0,0,128,32);using(Pen p=new Pen(t.XP?Color.FromArgb(137,190,255):Color.White))g.DrawLine(p,0,0,128,0);using(Pen p=new Pen(t.XP?Color.FromArgb(15,54,143):Color.Gray))g.DrawLine(p,0,31,128,31);}return b;}
+  public static Bitmap Texture(ThemeSpec t) {
+   int height=t.XP?48:32;Bitmap b=new Bitmap(50,height);
+   using(Graphics g=Graphics.FromImage(b)) {
+    if(t.XP)using(LinearGradientBrush fill=new LinearGradientBrush(new Rectangle(0,0,50,28),Color.FromArgb(70,148,255),Color.FromArgb(20,73,183),90))g.FillRectangle(fill,0,0,50,28);
+    else g.Clear(Color.Silver);
+    if(t.XP)using(SolidBrush bottom=new SolidBrush(b.GetPixel(0,27)))g.FillRectangle(bottom,0,28,50,height-28);
+    using(Pen p=new Pen(t.XP?Color.FromArgb(137,190,255):Color.White))g.DrawLine(p,0,0,49,0);
+    using(Pen p=new Pen(t.XP?Color.FromArgb(15,54,143):Color.Gray))g.DrawLine(p,0,height-1,49,height-1);
+   }
+   return b;
+  }
   public static Bitmap Preview(ThemeSpec t) {Bitmap b=new Bitmap(640,380);using(Graphics g=Graphics.FromImage(b)) {if(t.XP)using(Bitmap sky=Wallpaper(640,380))g.DrawImageUnscaled(sky,0,0);else g.Clear(Color.Teal);
     using(Font small=new Font("Tahoma",10))using(Font title=new Font("Tahoma",11,FontStyle.Bold)) {
      // A fictional sample window, not a promise of bitmap-skinned Windows 11 frames.

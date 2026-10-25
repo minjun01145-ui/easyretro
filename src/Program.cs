@@ -4,6 +4,8 @@ using System.IO;
 using System.Security.Principal;
 using System.Threading;
 using System.Windows.Forms;
+[assembly:System.Reflection.AssemblyVersion("0.2.0.0")]
+[assembly:System.Reflection.AssemblyFileVersion("0.2.0.0")]
 namespace EasyRetro {
  internal static class Program {
   static string Sid {get{return WindowsIdentity.GetCurrent().User.Value;}}
@@ -16,7 +18,7 @@ namespace EasyRetro {
   }
   internal static int Elevate(string action,string theme){
    ElevationFailureMessage=null;
-   ProcessStartInfo info=new ProcessStartInfo(Application.ExecutablePath,action+(theme==null?"":" "+theme)+" --user-sid "+Sid){UseShellExecute=true,Verb="runas"};
+   ProcessStartInfo info=new ProcessStartInfo(Application.ExecutablePath,action+(theme==null?"":" "+theme)+(string.IsNullOrWhiteSpace(Downloader.OfflineDirectory)?"":" --offline "+Processes.Q(Downloader.OfflineDirectory))+" --user-sid "+Sid){UseShellExecute=true,Verb="runas"};
    try{using(Process child=Process.Start(info)){child.WaitForExit();return child.ExitCode;}}
    catch(System.ComponentModel.Win32Exception error){ElevationFailureMessage=ElevationMessage(error.NativeErrorCode);ConsoleOutput.WriteLine(ElevationFailureMessage);return error.NativeErrorCode;}
   }
@@ -28,9 +30,9 @@ namespace EasyRetro {
    Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
    Application.ThreadException+=delegate(object sender,ThreadExceptionEventArgs eventArgs){MessageBox.Show(Log.Failure(eventArgs.Exception),"EasyRetro · 오류",MessageBoxButtons.OK,MessageBoxIcon.Error);};
    bool dry=false,self=false,status=false,verify=false,help=false;string action=null,theme=null,originalSid=null;
-   for(int i=0;i<args.Length;i++){switch(args[i]){case "--help":case "-h":case "/?":help=true;break;case "--dry-run":dry=true;break;case "--selftest":self=true;break;case "--status":status=true;break;case "--verify":verify=true;break;case "--apply":if(action!=null||i+1>=args.Length)throw new ArgumentException("--apply 98|xp");action=args[i];theme=args[++i];ThemeSpec.Get(theme);break;case "--restore":case "--uninstall":if(action!=null)throw new ArgumentException("한 번에 한 작업만 가능합니다.");action=args[i];break;case "--user-sid":if(i+1>=args.Length)throw new ArgumentException("사용자 SID 누락");originalSid=args[++i];break;default:throw new ArgumentException("지원하지 않는 인자: "+args[i]);}}
+   for(int i=0;i<args.Length;i++){switch(args[i]){case "--help":case "-h":case "/?":help=true;break;case "--dry-run":dry=true;break;case "--selftest":self=true;break;case "--status":status=true;break;case "--verify":verify=true;break;case "--offline":if(i+1>=args.Length)throw new ArgumentException("--offline <dir>");Downloader.OfflineDirectory=Path.GetFullPath(args[++i]);break;case "--apply":if(action!=null||i+1>=args.Length)throw new ArgumentException("--apply 98|xp");action=args[i];theme=args[++i];ThemeSpec.Get(theme);break;case "--restore":case "--uninstall":if(action!=null)throw new ArgumentException("한 번에 한 작업만 가능합니다.");action=args[i];break;case "--user-sid":if(i+1>=args.Length)throw new ArgumentException("사용자 SID 누락");originalSid=args[++i];break;default:throw new ArgumentException("지원하지 않는 인자: "+args[i]);}}
    if((self?1:0)+(status?1:0)+(verify?1:0)+(help?1:0)+(action==null?0:1)>1 || dry&&(action==null||action=="--uninstall"))throw new ArgumentException("인자 조합 오류");
-   if(help){ConsoleOutput.WriteLine("EasyRetro 0.1.2\n사용법: EasyRetro.exe [--status | --verify | --selftest | --dry-run --apply 98|xp | --dry-run --restore]\n--verify: 현재 사용자 원본 스냅샷 대비 남아 있는 변경 확인 (읽기 전용, 종료 코드 0)\n실제 변경: --apply 98|xp | --restore | --uninstall (관리자 권한 필요)");return 0;}
+   if(help){ConsoleOutput.WriteLine("EasyRetro 0.2.0\n사용법: EasyRetro.exe [--status | --verify | --selftest | --dry-run --apply 98|xp | --dry-run --restore]\n--offline <dir> / EASYRETRO_OFFLINE: 검증된 설치/원본 파일 폴더 (네트워크 사용 안 함)\n--verify: 현재 사용자 원본 스냅샷 대비 남아 있는 변경 확인 (읽기 전용, 종료 코드 0)\n실제 변경: --apply 98|xp | --restore | --uninstall (관리자 권한 필요)");return 0;}
    if(verify){Verification.Run(StateStore.Default());return 0;}
    bool mutation=action!=null&&!dry;
    bool elevated=new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
@@ -50,7 +52,7 @@ namespace EasyRetro {
    string folder=Path.Combine(Path.GetTempPath(),"EasyRetro-selftest-"+Guid.NewGuid().ToString("N"));
    AssetGenerator.Generate(Path.Combine(folder,"assets"));ConsoleOutput.WriteLine("Assets: "+Path.Combine(folder,"assets"));
    XpAssets.SelfTest(folder,ConsoleOutput.WriteLine);
-   foreach(Dependency d in new[]{Dependencies.EP,Dependencies.OS})Downloader.Fetch(d,Path.Combine(folder,"cache"));
+   foreach(Dependency d in new[]{Dependencies.EP,Dependencies.OS})Downloader.Fetch(d,StateStore.Default().PathFor("cache"));
    ConsoleOutput.WriteLine("PASS --selftest: every XP source URL hash-verified; original images assembled; WAV headers verified; both dependencies hash-verified; OS check OK; no system settings changed.");
   }
  }

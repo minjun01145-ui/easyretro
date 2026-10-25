@@ -102,7 +102,8 @@ namespace EasyRetro {
    using(Bitmap image=new Bitmap(source)) {
     if(image.Width!=100||image.Height!=162)throw new InvalidDataException("XP 시작버튼 스트립 크기 불일치");
     // Source: three 100x54 frames, each with 12 transparent rows above/below 30 XP rows.
-    // Open-Shell StartButton.cpp v4.4.198: normal/hot/pressed stacked equally, no DPI resampling here.
+    // https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/StartMenu/StartMenuDLL/StartButton.cpp#L587-L589
+    // normal/hot/pressed stacked equally; caption is in the source pixels, no DPI resampling here.
     using(Bitmap output=new Bitmap(100,90,PixelFormat.Format32bppArgb)) {
      BitmapData input=image.LockBits(new Rectangle(0,0,100,162),ImageLockMode.ReadOnly,PixelFormat.Format32bppArgb);
      try {
@@ -135,7 +136,12 @@ namespace EasyRetro {
     int colors=BitConverter.ToInt32(dib,32);if(colors==0)colors=256;
     using(MemoryStream stream=new MemoryStream()) {
      using(BinaryWriter writer=new BinaryWriter(stream,Encoding.ASCII,true)){writer.Write((ushort)0x4d42);writer.Write(14+dib.Length);writer.Write(0);writer.Write(14+40+colors*4);writer.Write(dib);}
-     stream.Position=0;using(Image image=Image.FromStream(stream))image.Save(target,ImageFormat.Png);
+     stream.Position=0;using(Bitmap image=new Bitmap(stream))using(Bitmap output=new Bitmap(50,48,PixelFormat.Format32bppArgb)) {
+      // The pinned resource is 50x28, not 28x50. Preserve all 28 rows 1:1, then extend
+      // its final row to the 48px taskbar; horizontal tiling introduces no interpolation.
+      for(int y=0;y<output.Height;y++)for(int x=0;x<output.Width;x++)output.SetPixel(x,y,image.GetPixel(x,Math.Min(y,image.Height-1)));
+      output.Save(target,ImageFormat.Png);
+     }
     }
    }finally{FreeLibrary(module);}
   }
@@ -169,7 +175,7 @@ namespace EasyRetro {
    PreparedXpAssets prepared=Prepare(cache,report);if(prepared.Substitutes.Count!=0)throw new InvalidDataException("자체검사에서는 대체 에셋을 허용하지 않습니다: "+prepared.Notice);
    Publish(prepared,Path.Combine(folder,"assets"));Directory.Delete(prepared.Folder,true);
    foreach(XpSound sound in Sounds)report("PASS WAV "+sound.Name+" / "+ValidateWave(Path.Combine(folder,"assets",sound.Name)));
-   report("PASS XP images: Bliss 800x600; start 100x90 (3 x 100x30); taskbar 50x28 / "+Path.Combine(folder,"assets"));
+   report("PASS XP images: Bliss 800x600; start 100x90 (3 x 100x30); taskbar 50x48 (28 native rows + repeated bottom row) / "+Path.Combine(folder,"assets"));
   }
  }
 }

@@ -48,7 +48,7 @@ namespace EasyRetro {
   }
   static string Exists(string path){return (File.Exists(path)||Directory.Exists(path)?"있음: ":"없음: ")+path;}
   public static void Run(StateStore store) {
-   Print("EasyRetro 0.1.2 읽기 전용 검증 (현재 사용자 / 설정 변경 없음)");
+   Print("EasyRetro 0.2.0 읽기 전용 검증 (현재 사용자 / 설정 변경 없음)");
    Read("적용된 테마",delegate{AppState state=store.Load();return state==null?"없음":(state.appliedTheme??"없음")+" / "+state.operation;});
    RegistrySnapshot snapshot=null;
    string file=store.PathFor("backup/values.json");

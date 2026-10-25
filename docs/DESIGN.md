@@ -59,10 +59,12 @@ flowchart TD
 | Cursors | Win11 내장 레거시 커서(`C:\Windows\Cursors`의 비-aero 세트, HKLM 커서 스킴 목록에서 확인) | Win11 내장 "Windows 표준" 계열 | `HKCU\Control Panel\Cursors` + `SPI_SETCURSORS` |
 | DesktopIcons | 내 컴퓨터·휴지통 표시 | 동일 | `...\Explorer\HideDesktopIcons\NewStartPanel` CLSID 값 |
 | ExplorerPatcher | Win10식 작업표시줄, 좌측정렬, 항상 결합(그룹화), 작은 아이콘 | 동일, 기본 크기 | EP 레지스트리 키 + `Explorer\Advanced` TaskbarGlomLevel=0 등. 파일탐색기/리본 관련 값 금지 |
-| OpenShell | 스타일 Classic, 스킨 Classic Skin, 생성한 회색 "Start" 버튼, 회색 작업표시줄 텍스처 + 검정 글자, 검색창 표시 | 스타일 2단, 스킨 Windows XP Luna. 실제 XP 캡처의 normal/hot/pressed 100×30을 100×90 PNG로 조립(투명 여백만 제거, 앱 DPI 확대 없음). 원본 luna.msstyles의 `BLUE_TASKBARBACKGROUND_BMP` 50×28을 무실행 데이터 리소스로 추출하여 TaskbarTexture 설정. 각각 실패 시 해당 그림만 생성 대체 | `HKCU\Software\OpenShell\StartMenu\Settings` 값 직접 기록. Win 키 → Open-Shell, Shift+Win → Win11 원래 시작. `StartButtonSize=0`으로 Open-Shell 처리, `CustomTaskbar` 활성화 ([4.4.198 소스](https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/StartMenu/StartMenuDLL/SettingsUI.cpp#L4465)); Classic 스킨 실제 파일명 `Classic Skin.skin` ([설치 소스](https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/Setup/Setup.wxs#L524)) |
+| OpenShell | 스타일 Classic, 스킨 Classic Skin, 글자가 포함된 108×96(3×32) 버튼, 50×32 평면 회색 텍스처 + 검정 글자, 검색창 표시 | 스타일 2단, 스킨 Windows XP Luna. 실제 XP normal/hot/pressed 100×30을 100×90 PNG로 조립(투명 여백만 제거). luna.msstyles의 실제 `BLUE_TASKBARBACKGROUND_BMP` 50×28은 원본 픽셀을 유지하고 마지막 행 반복으로 50×48로 확장(세로 보간 없음). 각각 실패 시 해당 그림만 생성 대체 | `HKCU\Software\OpenShell\StartMenu\Settings`: `StartButtonSize=0`, `CustomTaskbar=1`, `TaskbarTileH=Tile`, `TaskbarTileV=Stretch` ([고정 값 정의](https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/StartMenu/StartMenuDLL/SettingsUI.cpp#L4475-L4481)). Win → Open-Shell, Shift+Win → 원래 시작. Classic 스킨 실제 파일명 `Classic Skin.skin` |
 | Shell | — | — | 마지막에 1회: `WM_SETTINGCHANGE` 브로드캐스트 + 탐색기 재시작 |
 
 원본 다운로드/해시 검증·변환은 스냅샷 및 시스템 변경 전 `cache\xp-prepared`에서 완료한다. 적용 트랜잭션은 기존 에셋을 백업한 뒤 준비 파일을 게시하고, 실패 시 기존 에셋부터 되돌린 뒤 모듈을 복구한다. 시작버튼 출처/크레딧: Classic Shell 포럼 troy2000me의 XP 캡처, Jcee/Gaurav의 투명 배경·ClearType 정리본(첨부 550/549 동일 바이트). Luna 원본의 빈 버튼 배경만으로 로고/글자를 새로 그리지 않는다. 저장소에는 URL/해시/코드만 있고 Microsoft 이미지·소리·다운로드 캐시를 넣지 않는다.
+v0.2.0은 전역 `DwmWindowCornerPreference` 레지스트리 값을 만들지 않는다. EP의 가상 `DisableRoundedCorners`는 DWORD 저장이 아닌 uDWM 메모리 패치 서비스 등록이며 24H2 이상 지원 근거가 부족하다. 둥근 모서리는 명시적인 제한이며 앱별 API 적용은 다음 버전 검토 대상이다.
+
 
 ## 5. 상태·백업
 
@@ -102,6 +104,7 @@ flowchart TD
 | `--status` | 일반 | 현재 상태 출력 |
 | `--dry-run --apply 98\|xp` / `--dry-run --restore` | 일반 | 변경 없이 계획 동작 목록 출력 |
 | `--selftest` | 일반 | 모든 XP 원본/미러 URL 각각 다운로드+해시/크기 검증(PASS/FAIL), 실제 이미지 조립, WAV 헤더 검사, 기존 의존성 다운로드+SHA-256/OS 검사. 대체 에셋 불허, 시스템 변경 없음 |
+| `--offline <dir>` / `EASYRETRO_OFFLINE` | 일반/작업에 따름 | 캐시 다음 지정 폴더의 파일을 SHA-256 검증; 지정 시 네트워크 사용 안 함 |
 
 Win11(빌드 ≥ 22000) 아니면 거부. 중복 실행 방지 뮤텍스.
 
@@ -109,8 +112,10 @@ Win11(빌드 ≥ 22000) 아니면 거부. 중복 실행 방지 뮤텍스.
 
 - 언어: C# 5 (Win11 내장 `%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe`로 빌드 가능해야 함 → 문자열 보간·`?.`·`nameof`·식 본문 멤버 금지). WinForms, `System.Web.Extensions`(JavaScriptSerializer), `System.Drawing`.
 - `build.cmd` → `dist\EasyRetro.exe`. 매니페스트: `asInvoker`, PerMonitorV2 DPI, Win10+ supportedOS.
-- GitHub Actions(`windows-latest`)가 태그 푸시 시 같은 `build.cmd`로 빌드해 릴리스에 `EasyRetro.exe` 첨부. 사용자는 Releases에서 exe 하나만 받는다.
+- GitHub Actions(`windows-latest`)가 태그 푸시 시 같은 `build.cmd`로 빌드해 `EasyRetro.exe`, 소스/빌드/복구 도구/동일 실행 파일이 담긴 `EasyRetro-<tag>-src.zip`, 두 파일의 `SHA256SUMS.txt`를 첨부한다.
 - UI 문구 한국어.
+- v0.2.0 복구는 EP 등록 제거 프로그램 → 해시 검증 캐시 → 오프라인 폴더 → 마지막으로 다운로드, Open-Shell MSI ProductCode → 등록 제거 프로그램 순이다. 제거 실패는 사용자 설정 복구를 중단하지 않으며 정확한 수동 제거 경로를 경고하고 종료 코드 0을 유지한다. 원본 파일 누락/손상은 항목별로 수집하고 나머지를 복구한 뒤 백업/상태를 보존한다.
+- `tools/easyretro-restore.ps1`는 Windows PowerShell 5.1용 네트워크 없는 텍스트 복구다. 기본은 계획, `-Apply`만 변경하며 HKLM/구성요소/쉘 작업에 필요할 때만 같은 사용자 UAC를 요청한다. 레지스트리 전체 키는 원본과 다를 때만 .reg를 가져오고 이미지로 추가 값/하위 키를 제거한다. `tools/test-recovery.ps1`는 HKCU EasyRetroTest*에서만 합성 복구를 검증하며 실제 테마 적용/복구/설치/제거/Explorer 재시작은 호출하지 않는다.
 
 ## 11. 소스 구조
 

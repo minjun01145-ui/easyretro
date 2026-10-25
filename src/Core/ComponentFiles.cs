@@ -23,12 +23,17 @@ namespace EasyRetro {
     ComponentState component;Dependency dependency=folder.component==Dependencies.EP.Id?Dependencies.EP:Dependencies.OS;
     if(!state.components.TryGetValue(folder.component,out component)||!component.installedByUs||Dependencies.Detect(dependency)!=null)continue;
     try {
-     foreach(string relative in folder.files)if(!File.Exists(Path.Combine(directory,folder.name,relative)))throw new FileNotFoundException("구성요소 원본 파일 백업이 없습니다.",relative);
+     bool complete=true;
+     foreach(string relative in folder.files)if(!File.Exists(Path.Combine(directory,folder.name,relative))){complete=false;errors.Add(new FileNotFoundException("구성요소 원본 파일 백업이 없습니다.",Path.Combine(directory,folder.name,relative)));}
      string target=Target(folder);
-     if(Directory.Exists(target))StateStore.DeleteDirectory(target);
+     // A partial backup must never erase the live folder before salvaging the remaining files.
+     if(complete&&Directory.Exists(target))StateStore.DeleteDirectory(target);
      if(folder.existed) {
       Directory.CreateDirectory(target);foreach(string child in folder.directories)Directory.CreateDirectory(Path.Combine(target,child));
-      foreach(string relative in folder.files){string destination=Path.Combine(target,relative);Directory.CreateDirectory(Path.GetDirectoryName(destination));File.Copy(Path.Combine(directory,folder.name,relative),destination,true);}
+      foreach(string relative in folder.files) {
+       string source=Path.Combine(directory,folder.name,relative);if(!File.Exists(source))continue;
+       try{string destination=Path.Combine(target,relative);Directory.CreateDirectory(Path.GetDirectoryName(destination));File.Copy(source,destination,true);}catch(Exception error){errors.Add(error);}
+      }
      }
     }catch(Exception error){errors.Add(error);}
    }

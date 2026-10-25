@@ -9,7 +9,7 @@ namespace EasyRetro {
   void Start(object sender,EventArgs args){
    BackgroundWorker worker=new BackgroundWorker();
    string completionNotice="";
-   worker.DoWork+=delegate{StateStore store=StateStore.Default();Log.Start(store);Engine engine=new Engine(store,delegate(string text){if(!IsDisposed&&IsHandleCreated)BeginInvoke((Action)delegate{if(!details.IsDisposed)details.AppendText(text+Environment.NewLine);});});if(action=="--apply"){engine.Apply(theme);completionNotice=engine.CompletionNotice;}else{engine.Restore();if(action=="--uninstall")SelfInstall.Remove();}};
+   worker.DoWork+=delegate{StateStore store=StateStore.Default();Log.Start(store);Engine engine=new Engine(store,delegate(string text){if(!IsDisposed&&IsHandleCreated)BeginInvoke((Action)delegate{if(!details.IsDisposed)details.AppendText(text+Environment.NewLine);});});if(action=="--apply")engine.Apply(theme);else{engine.Restore();if(action=="--uninstall")SelfInstall.Remove();}completionNotice=engine.CompletionNotice;};
    worker.RunWorkerCompleted+=delegate(object s,RunWorkerCompletedEventArgs e){running=false;worker.Dispose();if(e.Error!=null){MessageBox.Show(this,Log.Failure(e.Error),"EasyRetro · 오류",MessageBoxButtons.OK,MessageBoxIcon.Error);Result=1;}else{MessageBox.Show(this,"완료했습니다."+(string.IsNullOrEmpty(completionNotice)?"":Environment.NewLine+completionNotice),"EasyRetro",MessageBoxButtons.OK,MessageBoxIcon.Information);Result=0;}Close();};
    worker.RunWorkerAsync();
   }
