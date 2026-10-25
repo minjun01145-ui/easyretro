@@ -13,7 +13,7 @@ Windows 11 전용. 실행 → "Windows 98" / "Windows XP" 중 하나 클릭 → 
 
 비목표(v0.1): 비서명 msstyles(창 테두리 비트맵 스킨)·시스템 파일 패치·Windhawk. 창은 DWM 강조색(XP 파랑 / 98 남색 제목표시줄) + 클래식 시스템 색상 + 글꼴로 표현. 이후 버전에서 선택형 고급 모듈로 검토.
 
-저작권: Microsoft 원본 그림·소리를 재배포하지 않는다. 배경화면·시작버튼·작업표시줄 텍스처·미리보기·XP풍 효과음은 **런타임에 코드로 생성한 오리지널**. 98 효과음은 Win11에 이미 있는 `C:\Windows\Media\{chimes,chord,ding,notify,recycle,tada}.wav`를 참조만 한다. 저장소에 바이너리 에셋 없음.
+저작권: 공개 저장소와 배포 실행 파일에는 Microsoft 원본 그림·소리를 포함/재배포하지 않는다. XP는 **Microsoft 저작권 원본 Bliss(출시본 800×600), Luna 시작버튼 실제 화면 캡처, luna.msstyles의 작업표시줄 비트맵, XP Media WAV**를 런타임에 제3자 공개 보관소에서 다운로드한다. `XpAssets.cs`에 항목 페이지·직접 URL·두 번째 URL·SHA-256·크기를 고정하고 Downloader의 TLS 1.2/캐시/검증을 공유한다. 공개 다운로드는 재배포/사용권 허가가 아니며 자산은 MIT 라이선스 대상이 아니다. 각 URL이 모두 실패한 항목만 기존 자체 생성 에셋으로 대체하고 로그/완료창에 한 줄 목록을 표시한다. 생성 코드는 이 대체 경로와 GUI 미리보기/98 그림에만 사용한다. 98 효과음은 Win11 내장 `C:\Windows\Media\{chimes,chord,ding,notify,recycle,tada}.wav` 참조만 한다. 출처/크레딧/고정 해시는 README에 기록한다.
 
 ## 2. 구성요소 (자동, 무인 설치)
 
@@ -51,18 +51,18 @@ flowchart TD
 
 | 모듈 | 98 | XP | 적용 방식 |
 | --- | --- | --- | --- |
-| Wallpaper | 단색 청록 (0,128,128), 배경그림 없음 | 생성한 "푸른 하늘+녹색 언덕" 오리지널 이미지(주 모니터 해상도) | `SPI_SETDESKWALLPAPER`, `Control Panel\Colors\Background`, `Control Panel\Desktop` WallpaperStyle |
+| Wallpaper | 단색 청록 (0,128,128), 배경그림 없음 | Microsoft 원본 Bliss 800×600 다운로드 → 픽셀 보존 PNG, 실패 시 자체 생성 언덕만 대체 | `SPI_SETDESKWALLPAPER`, `Control Panel\Colors\Background`, `Control Panel\Desktop` WallpaperStyle |
 | SysColors | 클래식 회색 팔레트(ButtonFace 192,192,192 / ActiveTitle 0,0,128 / GradientActiveTitle 16,132,208 등) | Luna풍 팔레트(ButtonFace 236,233,216 / ActiveTitle 0,84,227 / Hilight 49,106,197 등) | `SetSysColors`(즉시) + `HKCU\Control Panel\Colors`(영구) |
 | DwmAccent | 제목표시줄 남색 | 제목표시줄 XP 파랑 | `HKCU\Software\Microsoft\Windows\DWM` AccentColor/ColorizationColor/ColorPrevalence=1, `...\Themes\Personalize` ColorPrevalence=1, EnableTransparency=0, Apps/SystemUsesLightTheme=1, `...\Explorer\Accent` AccentPalette/AccentColorMenu, 이후 `WM_SETTINGCHANGE "ImmersiveColorSet"` |
 | Fonts | Microsoft Sans Serif | Tahoma | `SPI_GET/SETNONCLIENTMETRICS`, `SPI_SETICONTITLELOGFONT` + `SPIF_UPDATEINIFILE|SPIF_SENDCHANGE`. 원본 구조체 바이트를 base64로 백업 |
-| Sounds | 스킴 `EasyRetro98`: Win11 내장 레거시 wav 매핑 | 스킴 `EasyRetroXP`: 생성한 오리지널 wav(로그온/로그오프/딩/오류/알림/휴지통) | `HKCU\AppEvents\Schemes\Apps\...\<event>\.Current`, `Schemes` 기본값, `Schemes\Names\<scheme>` |
+| Sounds | 스킴 `EasyRetro98`: Win11 내장 레거시 wav 매핑, XP 전용 이벤트 무음 | 스킴 `EasyRetroXP`: 해시 검증된 Media ZIP의 원본 WAV 22개. Startup/SystemStart, Logon/WindowsLogon, Logoff/WindowsLogoff, Shutdown/SystemExit, Default/.Default, Ding/SystemAsterisk·SystemQuestion, Critical Stop/SystemHand, Exclamation/SystemExclamation, Error/AppGPFault, Balloon/SystemNotification, Notify/MailBeep·Notification.Default, Recycle/Explorer.EmptyRecycleBin, Minimize/Restore/MenuCommand/DeviceConnect·Disconnect·Fail/LowBatteryAlarm/CriticalBatteryAlarm/PrintComplete/Explorer.Navigating (README 전체 표) | `HKCU\AppEvents\Schemes\Apps\...\<event>\.Current` + 명명 스킴, `Schemes` 기본값, `Schemes\Names\<scheme>`; PCM/ADPCM 헤더 검사. 현대 Windows가 억제하는 시작/종료 소리는 강제 재생하지 않음 |
 | Cursors | Win11 내장 레거시 커서(`C:\Windows\Cursors`의 비-aero 세트, HKLM 커서 스킴 목록에서 확인) | Win11 내장 "Windows 표준" 계열 | `HKCU\Control Panel\Cursors` + `SPI_SETCURSORS` |
 | DesktopIcons | 내 컴퓨터·휴지통 표시 | 동일 | `...\Explorer\HideDesktopIcons\NewStartPanel` CLSID 값 |
 | ExplorerPatcher | Win10식 작업표시줄, 좌측정렬, 항상 결합(그룹화), 작은 아이콘 | 동일, 기본 크기 | EP 레지스트리 키 + `Explorer\Advanced` TaskbarGlomLevel=0 등. 파일탐색기/리본 관련 값 금지 |
-| OpenShell | 스타일 Classic, 스킨 Classic Skin, 생성한 회색 "Start" 버튼, 회색 작업표시줄 텍스처 + 검정 글자, 검색창 표시 | 스타일 2단, 스킨 Windows XP Luna, 생성한 녹색 "start" 버튼, 파랑 그라데이션 작업표시줄 텍스처 + 흰 글자, 검색창 표시 | `HKCU\Software\OpenShell\StartMenu\Settings` 값 직접 기록(또는 `StartMenu.exe -xml`). Win 키 → Open-Shell, Shift+Win → Win11 원래 시작(검색 포함). 작업표시줄 스킨 활성화 값은 `SkinTaskbar`가 아니라 `CustomTaskbar` ([4.4.198 소스](https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/StartMenu/StartMenuDLL/SettingsUI.cpp#L4465)); Classic 스킨의 실제 파일명은 `Classic Skin.skin` ([설치 소스](https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/Setup/Setup.wxs#L524)) |
+| OpenShell | 스타일 Classic, 스킨 Classic Skin, 생성한 회색 "Start" 버튼, 회색 작업표시줄 텍스처 + 검정 글자, 검색창 표시 | 스타일 2단, 스킨 Windows XP Luna. 실제 XP 캡처의 normal/hot/pressed 100×30을 100×90 PNG로 조립(투명 여백만 제거, 앱 DPI 확대 없음). 원본 luna.msstyles의 `BLUE_TASKBARBACKGROUND_BMP` 50×28을 무실행 데이터 리소스로 추출하여 TaskbarTexture 설정. 각각 실패 시 해당 그림만 생성 대체 | `HKCU\Software\OpenShell\StartMenu\Settings` 값 직접 기록. Win 키 → Open-Shell, Shift+Win → Win11 원래 시작. `StartButtonSize=0`으로 Open-Shell 처리, `CustomTaskbar` 활성화 ([4.4.198 소스](https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/StartMenu/StartMenuDLL/SettingsUI.cpp#L4465)); Classic 스킨 실제 파일명 `Classic Skin.skin` ([설치 소스](https://github.com/Open-Shell/Open-Shell-Menu/blob/v4.4.198/Src/Setup/Setup.wxs#L524)) |
 | Shell | — | — | 마지막에 1회: `WM_SETTINGCHANGE` 브로드캐스트 + 탐색기 재시작 |
 
-시작버튼/텍스처 그림: Microsoft 로고 사용 금지(4색 깃발 대신 일반적인 레트로 아이콘).
+원본 다운로드/해시 검증·변환은 스냅샷 및 시스템 변경 전 `cache\xp-prepared`에서 완료한다. 적용 트랜잭션은 기존 에셋을 백업한 뒤 준비 파일을 게시하고, 실패 시 기존 에셋부터 되돌린 뒤 모듈을 복구한다. 시작버튼 출처/크레딧: Classic Shell 포럼 troy2000me의 XP 캡처, Jcee/Gaurav의 투명 배경·ClearType 정리본(첨부 550/549 동일 바이트). Luna 원본의 빈 버튼 배경만으로 로고/글자를 새로 그리지 않는다. 저장소에는 URL/해시/코드만 있고 Microsoft 이미지·소리·다운로드 캐시를 넣지 않는다.
 
 ## 5. 상태·백업
 
@@ -70,7 +70,7 @@ flowchart TD
 - `state.json`: `{ version, appliedTheme, snapshotCreatedUtc, components: { explorerPatcher: {installedByUs, version}, openShell: {installedByUs, productCode, version} }, completedModules: [...] }`
 - `backup\values.json`: 모듈이 만지는 각 레지스트리 값 `{hive, key, name, existed, kind, data}`. 키 전체 소유 대상(OpenShell/EP 설정)은 `reg export` 파일 + `keyExisted`.
 - `backup\nonclientmetrics.bin`, `backup\iconfont.bin`, 기타 SPI 원본값.
-- `assets\` 생성된 그림/소리, `cache\` 다운로드 설치 파일, `logs\easyretro-YYYYMMDD.log`.
+- `assets\` 다운로드 원본의 변환 그림/추출 WAV 및 생성 미리보기·대체 에셋, `cache\` 해시 검증된 다운로드 파일, `logs\easyretro-YYYYMMDD.log`.
 
 트랜잭션: 적용 중 실패 → 이번 실행에서 완료한 모듈을 역순 복구, 최초 적용이었다면 전체 복구 후 state 삭제. 실패 메시지는 로그 경로와 함께 표시.
 
@@ -101,7 +101,7 @@ flowchart TD
 | `--uninstall` | 상승 | 복구 + 앱 제거 |
 | `--status` | 일반 | 현재 상태 출력 |
 | `--dry-run --apply 98\|xp` / `--dry-run --restore` | 일반 | 변경 없이 계획 동작 목록 출력 |
-| `--selftest` | 일반 | 에셋을 임시폴더에 생성, 의존성 URL 다운로드+SHA-256 검증, OS 빌드 확인. 시스템 변경 없음 |
+| `--selftest` | 일반 | 모든 XP 원본/미러 URL 각각 다운로드+해시/크기 검증(PASS/FAIL), 실제 이미지 조립, WAV 헤더 검사, 기존 의존성 다운로드+SHA-256/OS 검사. 대체 에셋 불허, 시스템 변경 없음 |
 
 Win11(빌드 ≥ 22000) 아니면 거부. 중복 실행 방지 뮤텍스.
 
@@ -124,13 +124,14 @@ src/
   Core/RegistryBackup.cs     값 단위 캡처/복원, 키 export/import
   Core/Downloader.cs         TLS1.2, 캐시, SHA-256
   Core/Dependencies.cs       고정 버전·URL·해시·무인 인자(출처 주석)
+  Core/XpAssets.cs           XP 원본 URL·미러·해시·크기, 무실행 리소스/ZIP 추출, 이벤트 매핑, 항목별 생성 대체
   Core/ShellRestart.cs
   Core/SelfInstall.cs        자기 설치, 바로가기, Uninstall 키, 지연 삭제
   Core/NativeMethods.cs
   Core/Log.cs
   Themes/ThemeSpec.cs        98/XP 정의(데이터만)
   Modules/*.cs               §4 모듈들
-  Assets/AssetGenerator.cs   배경·시작버튼·텍스처·미리보기 그림, wav 합성
+  Assets/AssetGenerator.cs   98 그림·미리보기 및 XP 원본 실패 항목의 생성 대체만
 app.manifest
 build.cmd
 .github/workflows/release.yml

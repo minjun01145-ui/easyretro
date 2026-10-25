@@ -10,7 +10,7 @@ namespace EasyRetro {
   static readonly double[] durations={1.35,1.05,0.36,0.70,0.55,0.65};
   static readonly double[][] melodies={new[]{392.0,523.25,659.25},new[]{659.25,523.25,392.0},new[]{880.0,880.0,880.0},new[]{220.0,207.65,196.0},new[]{659.25,783.99,1046.50},new[]{523.25,392.0,261.63}};
   public static void Ensure(string folder) {
-   string[] files={"wallpaper-xp.png","start-98.png","start-xp.png","taskbar-98.png","taskbar-xp.png","preview-98.png","preview-xp.png","logon.wav","logoff.wav","ding.wav","error.wav","notify.wav","recycle.wav"};
+   string[] files={"start-98.png","taskbar-98.png","preview-98.png","preview-xp.png"};
    if(Array.TrueForAll(files,delegate(string file){return File.Exists(Path.Combine(folder,file));}))return;
    string staging=Path.Combine(Path.GetDirectoryName(folder),"asset-staging");
    if(Directory.Exists(staging))Directory.Delete(staging,true);
@@ -19,7 +19,7 @@ namespace EasyRetro {
     foreach(string file in files){string target=Path.Combine(folder,file);if(!File.Exists(target))File.Move(Path.Combine(staging,file),target);}
    }finally{if(Directory.Exists(staging))Directory.Delete(staging,true);}
   }
-  public static void Generate(string folder) {Directory.CreateDirectory(folder);Size size=Screen.PrimaryScreen.Bounds.Size;using(Bitmap b=Wallpaper(size.Width,size.Height))b.Save(Path.Combine(folder,"wallpaper-xp.png"),ImageFormat.Png);foreach(string id in new[]{"98","xp"}) {ThemeSpec t=ThemeSpec.Get(id);using(Bitmap b=Button(t))b.Save(Path.Combine(folder,"start-"+id+".png"),ImageFormat.Png);using(Bitmap b=Texture(t))b.Save(Path.Combine(folder,"taskbar-"+id+".png"),ImageFormat.Png);using(Bitmap b=Preview(t))b.Save(Path.Combine(folder,"preview-"+id+".png"),ImageFormat.Png);}string[] names={"logon","logoff","ding","error","notify","recycle"};for(int i=0;i<names.Length;i++)Wave(Path.Combine(folder,names[i]+".wav"),i);}
+  public static void Generate(string folder) {Directory.CreateDirectory(folder);ThemeSpec classic=ThemeSpec.Get("98");using(Bitmap b=Button(classic))b.Save(Path.Combine(folder,"start-98.png"),ImageFormat.Png);using(Bitmap b=Texture(classic))b.Save(Path.Combine(folder,"taskbar-98.png"),ImageFormat.Png);foreach(string id in new[]{"98","xp"})using(Bitmap b=Preview(ThemeSpec.Get(id)))b.Save(Path.Combine(folder,"preview-"+id+".png"),ImageFormat.Png);}
   public static Bitmap Wallpaper(int width,int height) {
    Bitmap b=new Bitmap(width,height);using(Graphics g=Graphics.FromImage(b)) {g.SmoothingMode=SmoothingMode.AntiAlias;g.ScaleTransform(width/1600f,height/900f);using(LinearGradientBrush sky=new LinearGradientBrush(new Rectangle(0,0,1600,900),Color.FromArgb(33,108,199),Color.FromArgb(190,227,247),90))g.FillRectangle(sky,0,0,1600,900);
     // Soft, original clouds; no source photograph or Microsoft artwork.
@@ -51,7 +51,7 @@ namespace EasyRetro {
      for(int i=0;i<2;i++) {int y=28+i*83;g.FillRectangle(Brushes.LightGray,34,y,27,23);g.FillRectangle(Brushes.Navy,37,y+3,21,14);g.DrawString(i==0?"Computer":"Recycle Bin",small,Brushes.White,15,y+30);}
     }
    }return b;}
-  static void Wave(string path,int type) {
+  internal static void Wave(string path,int type) {
    const int rate=44100;
    double seconds=durations[type],noteLength=seconds/3;
    double[] notes=melodies[type];

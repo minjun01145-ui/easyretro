@@ -32,8 +32,17 @@ namespace EasyRetro {
   public override string Id {get{return "Sounds";}}
   static readonly string[] Events={"WindowsLogon","WindowsLogoff",".Default","SystemHand","SystemNotification","EmptyRecycleBin"};
   static readonly string[] Legacy={"tada","chimes","ding","chord","notify","recycle"};
-  static readonly string[] Original={"logon","logoff","ding","error","notify","recycle"};
-  public override List<Setting> Settings(ThemeSpec t,ApplyContext c) {string root=@"AppEvents\Schemes",scheme=t.XP?"EasyRetroXP":"EasyRetro98";List<Setting> values=new List<Setting>{new Setting(root,"",scheme),new Setting(root+@"\Names\"+scheme,"",t.XP?"EasyRetro XP":"EasyRetro 98")};for(int i=0;i<Events.Length;i++){string app=Events[i]=="EmptyRecycleBin"?"Explorer":".Default";string k=root+@"\Apps\"+app+"\\"+Events[i];string file=t.XP?Path.Combine(c.Assets,Original[i]+".wav"):Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),"Media",Legacy[i]+".wav");values.Add(new Setting(k+@"\.Current","",file));values.Add(new Setting(k+"\\"+scheme,"",file));}return values;}
+  public override List<Setting> Settings(ThemeSpec t,ApplyContext c) {
+   string root=@"AppEvents\Schemes",scheme=t.XP?"EasyRetroXP":"EasyRetro98";
+   List<Setting> values=new List<Setting>{new Setting(root,"",scheme),new Setting(root+@"\Names\"+scheme,"",t.XP?"EasyRetro XP":"EasyRetro 98")};
+   if(t.XP)foreach(XpSound sound in XpAssets.Sounds)foreach(string soundEvent in sound.Events)AddSound(values,root+@"\Apps\"+soundEvent,scheme,Path.Combine(c.Assets,sound.Name));
+   else {
+    foreach(XpSound sound in XpAssets.Sounds)foreach(string soundEvent in sound.Events)AddSound(values,root+@"\Apps\"+soundEvent,scheme,"");
+    for(int i=0;i<Events.Length;i++){string app=Events[i]=="EmptyRecycleBin"?"Explorer":".Default";AddSound(values,root+@"\Apps\"+app+"\\"+Events[i],scheme,Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),"Media",Legacy[i]+".wav"));}
+   }
+   return values;
+  }
+  static void AddSound(List<Setting> values,string key,string scheme,string file){values.Add(new Setting(key+@"\.Current","",file));values.Add(new Setting(key+"\\"+scheme,"",file));}
   public override void Apply(ThemeSpec t,ApplyContext c) {foreach(Setting s in Settings(t,c))if(s.Value is string && ((string)s.Value).EndsWith(".wav",StringComparison.OrdinalIgnoreCase) && !File.Exists((string)s.Value))throw new FileNotFoundException("효과음 파일 없음",(string)s.Value);base.Apply(t,c);}
  }
  internal sealed class CursorsModule:RegistryModule {

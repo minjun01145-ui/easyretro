@@ -1,2 +1,5 @@
 dist/
 *.pdb
+/cache/
+/assets/
+/asset-staging/

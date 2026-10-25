@@ -35,6 +35,13 @@ namespace EasyRetro {
     }finally{mutex.ReleaseMutex();}
    }
   }catch(Exception error){string message=Log.Failure(error);if(cli)Console.Error.WriteLine(message);if(!cli||Array.IndexOf(args,"--user-sid")>=0)MessageBox.Show(message,"EasyRetro · 오류",MessageBoxButtons.OK,MessageBoxIcon.Error);return 1;}}
-  static void SelfTest(){Console.WriteLine("OS check OK: Windows 11 x64 build "+NativeMethods.WindowsBuild());string folder=Path.Combine(Path.GetTempPath(),"EasyRetro-selftest-"+Guid.NewGuid().ToString("N"));AssetGenerator.Generate(Path.Combine(folder,"assets"));Console.WriteLine("Assets generated: "+Path.Combine(folder,"assets"));foreach(Dependency d in new[]{Dependencies.EP,Dependencies.OS})Downloader.Fetch(d,Path.Combine(folder,"cache"));Console.WriteLine("PASS --selftest: assets generated; both dependencies hash-verified; OS check OK; no system settings changed.");}
+  static void SelfTest(){
+   Console.WriteLine("OS check OK: Windows 11 x64 build "+NativeMethods.WindowsBuild());
+   string folder=Path.Combine(Path.GetTempPath(),"EasyRetro-selftest-"+Guid.NewGuid().ToString("N"));
+   AssetGenerator.Generate(Path.Combine(folder,"assets"));Console.WriteLine("Assets: "+Path.Combine(folder,"assets"));
+   XpAssets.SelfTest(folder,Console.WriteLine);
+   foreach(Dependency d in new[]{Dependencies.EP,Dependencies.OS})Downloader.Fetch(d,Path.Combine(folder,"cache"));
+   Console.WriteLine("PASS --selftest: every XP source URL hash-verified; original images assembled; WAV headers verified; both dependencies hash-verified; OS check OK; no system settings changed.");
+  }
  }
 }

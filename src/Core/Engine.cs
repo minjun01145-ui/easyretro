@@ -6,6 +6,7 @@ namespace EasyRetro {
   readonly StateStore store;readonly Action<string> progress;
   readonly List<IModule> modules=new List<IModule>{new WallpaperModule(),new SysColorsModule(),new DwmAccentModule(),new FontsModule(),new SoundsModule(),new CursorsModule(),new DesktopIconsModule(),new ExplorerPatcherModule(),new OpenShellModule(),new ShellModule()};
   public Engine(StateStore store,Action<string> progress){this.store=store;this.progress=progress;}
+  public string CompletionNotice {get;private set;}
   void Report(string text){Log.Write(text);if(progress!=null)progress(text);}
   ApplyContext Context(AppState state){return new ApplyContext{Store=store,State=state};}
   public void Plan(string theme,bool restore) {
@@ -18,6 +19,7 @@ namespace EasyRetro {
     Report("제거 후 installer-side HKCU/HKLM 및 EP/Open-Shell 설정 원본 재복원 → 현재 세션의 모든 Explorer 종료 → 자동 재시작/LIMITED 일반 권한 쉘 확인");
     Report("state.json / backup / rollback / assets 삭제; logs 및 매니저 유지");
    }else {
+    if(t.XP)foreach(string asset in XpAssets.Plan(context.Assets))Report("[XP 에셋] "+asset);
     foreach(IModule module in modules){Report("["+module.Id+"] Backup / Apply");foreach(string text in module.Plan(t,context))Report("  "+text);}
     Report("설치 → Open-Shell 종료/NOSTART=1 → 설정 기록/첫 실행 설정창 방지 → 모든 현재 세션 Explorer 종료 → 자동 재시작/LIMITED 일반 권한 쉘 확인");
     Report("설치 전 MSI ProductCode/부분 설치 저널; 중단 시 매니저에서 최초 원본 복구 가능; 자기설치 실패도 롤백");
@@ -39,21 +41,24 @@ namespace EasyRetro {
    if(previous!=null&&previous.operation!="applied")throw new InvalidOperationException("중단된 작업이 있습니다. 먼저 원래대로 복구하세요.");
    bool first=previous==null;Dictionary<string,bool> present=new Dictionary<string,bool>();
    foreach(Dependency dependency in new[]{Dependencies.EP,Dependencies.OS}){bool exists=Dependencies.Detect(dependency)!=null;present[dependency.Id]=exists;if(!exists)Downloader.Fetch(dependency,store.PathFor("cache"));}
+   using(PreparedXpAssets xp=theme.XP?XpAssets.Prepare(store.PathFor("cache"),Report):null) {
    AppState state=first?new AppState{snapshotCreatedUtc=DateTime.UtcNow.ToString("o")}:previous;string priorTheme=state.appliedTheme;
    string folder=store.PathFor(first?"backup":"rollback");if(Directory.Exists(folder))StateStore.DeleteDirectory(folder);Directory.CreateDirectory(folder);
    RegistryBackup before=new RegistryBackup(folder,false);ApplyContext context=Context(state);
    Report(first?"원본 스냅샷 생성":"현재 테마 트랜잭션 스냅샷 생성 (최초 백업 보존)");
+   XpAssets.Backup(context.Assets,folder);
    foreach(IModule module in modules)module.Backup(before,context);Dependencies.Backup(before);ComponentFiles.Backup(folder);SelfInstall.Backup(before);
    if(!first)StateStore.WriteJson(Path.Combine(folder,"previous-state.json"),previous);
    before.Save();state.operation="applying";state.completedModules.Clear();store.Save(state);
    List<IModule> attempted=new List<IModule>();bool managerAttempted=false;
    try {
-    Dependencies.Prepare(state,store);Report("오리지널 에셋 준비 (기존 에셋 덮어쓰기 없음)");AssetGenerator.Ensure(context.Assets);
+    Dependencies.Prepare(state,store);Report("에셋 게시 (XP 원본은 스냅샷 전에 다운로드/검증 완료)");AssetGenerator.Ensure(context.Assets);if(xp!=null)XpAssets.Publish(xp,context.Assets);
     foreach(IModule module in modules){Report(module.Id+" 적용");attempted.Add(module);state.completedModules.Add(module.Id);store.Save(state);module.Apply(theme,context);}
     managerAttempted=true;state.selfInstallPending=true;store.Save(state);SelfInstall.Install();
     state.selfInstallPending=false;state.appliedTheme=id;state.operation="applied";store.Save(state);
    }catch(Exception error) {
     Report("적용 실패: "+error);List<Exception> errors=new List<Exception>();
+    Attempt(delegate{XpAssets.Rollback(context.Assets,folder);},errors);
     // Include the failing module: it may have mutated several values before throwing.
     for(int i=attempted.Count-1;i>=0;i--){IModule module=attempted[i];Attempt(delegate{module.Restore(before,context);},errors);}
     foreach(Dependency dependency in new[]{Dependencies.OS,Dependencies.EP})if(!present[dependency.Id]){Dependency item=dependency;Attempt(delegate{Dependencies.Remove(item,state,store);},errors);}
@@ -67,7 +72,8 @@ namespace EasyRetro {
     throw;
    }
    // Cleanup is not part of apply: failure deleting a temp backup must never undo committed success.
-   if(!first)RemoveRollbackFolder(folder);Report("완료: "+id);
+   if(!first)RemoveRollbackFolder(folder);CompletionNotice=xp==null?"":xp.Notice;Report("완료: "+id);if(!string.IsNullOrEmpty(CompletionNotice))Report(CompletionNotice);
+   }
   }
   public void Restore() {
    AppState state=store.Load();if(state==null){Report("적용된 테마가 없습니다. 복구할 변경 없음.");return;}
