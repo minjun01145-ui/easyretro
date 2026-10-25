@@ -19,7 +19,7 @@ namespace EasyRetro {
    bool elevated=new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
    bool created;
    // A non-elevated CLI launcher must not hold the elevated worker's mutex while waiting for runas.
-   string name="Local\\EasyRetro-"+Sid+(mutation&&elevated?"-Action":"-Manager");
+   string name="Local\\EasyRetro-"+Sid+(mutation?(elevated?"-Action":"-Launcher"):"-Manager");
    using(Mutex mutex=new Mutex(true,name,out created)){if(!created){if(!cli)MessageBox.Show("EasyRetro가 이미 실행 중입니다.","EasyRetro");else Console.WriteLine("EasyRetro가 이미 실행 중입니다.");return 2;}
     try {StateStore store=StateStore.Default();Engine engine=new Engine(store,null);
      if(dry){engine.Plan(theme??"98",action=="--restore");return 0;}if(status){engine.Status();return 0;}if(self){SelfTest();return 0;}
